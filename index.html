@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CLONEFLIX ULTRA</title>
+    <title>CLONEFLIX ULTRA - V3</title>
     <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
     <style>
         :root { --red: #E50914; --bg: #000; --card-bg: #141414; --gray: #222; --yellow: #f1c40f; }
@@ -40,15 +40,22 @@
         .btn-adm { border: none; padding: 8px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #fff; cursor: pointer; }
         .input-adm { width: 100%; padding: 10px; margin-bottom: 10px; background: #222; border: 1px solid #333; color: #fff; border-radius: 5px; box-sizing: border-box; }
         #player-box { display: none; position: fixed; inset: 0; background: #000; z-index: 2000; }
+        #loading-overlay { display:none; position: fixed; inset:0; background: rgba(0,0,0,0.85); z-index: 3000; align-items:center; justify-content:center; flex-direction:column; }
     </style>
 </head>
 <body>
+
+    <div id="loading-overlay">
+        <div style="border:4px solid #f3f3f3; border-top:4px solid var(--red); border-radius:50%; width:45px; height:45px; animation: spin 1s linear infinite;"></div>
+        <p style="margin-top:15px; font-size:14px; font-weight:bold;">Processando vídeo...</p>
+    </div>
+    <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
 
     <div id="login-ui">
         <div style="position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; z-index: 9999;">
             <div style="width: 85%; max-width: 340px; background: #111; padding: 30px; border-radius: 10px; text-align: center; border: 1px solid #333;">
                 <h1 style="color:var(--red);">CLONEFLIX</h1>
-                <div id="login-status" style="font-size: 12px; margin-bottom: 10px; color: var(--yellow);">Iniciando sistema...</div>
+                <div id="login-status" style="font-size: 12px; margin-bottom: 10px; color: var(--yellow);">Iniciando...</div>
                 <input type="text" id="user" placeholder="Usuário" class="input-adm">
                 <input type="password" id="pass" placeholder="Senha" class="input-adm">
                 <button onclick="autenticar()" style="width:100%; padding:12px; background:var(--red); color:#fff; border:none; border-radius:5px; font-weight:bold;">ENTRAR</button>
@@ -69,13 +76,13 @@
                 <div id="welcome-msg" class="welcome-center"></div>
             </header>
             <div class="search-container">
-                <input type="text" id="main-search" class="search-input" placeholder="Pesquisar..." oninput="executarBusca(this.value)">
+                <input type="text" id="main-search" class="search-input" placeholder="O que vamos assistir hoje?" oninput="executarBusca(this.value)">
             </div>
             <div class="secao-container">
                 <button class="btn-secao active" onclick="mudarSecao('live', this)">CANAIS</button>
                 <button class="btn-secao" onclick="mudarSecao('movie', this)">FILMES</button>
                 <button class="btn-secao" onclick="mudarSecao('series', this)">SÉRIES</button>
-                <button class="btn-secao" onclick="mostrarFavoritos(this)" style="color:var(--yellow)">★ MINHA LISTA</button>
+                <button class="btn-secao" onclick="mostrarFavoritos(this)" style="color:var(--yellow)">★ LISTA</button>
             </div>
         </div>
         <div id="conteudo-principal"></div>
@@ -83,32 +90,20 @@
 
     <div id="modal-adm" class="modal">
         <span class="close-modal" onclick="fecharModais()">✕</span>
-        <h3 style="color:var(--red)">PAINEL ADM</h3>
-        
-        <div style="background:#111; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid var(--red);">
-            <h4 style="margin:0 0 10px 0; font-size:12px; color:var(--red);">SERVIDOR IPTV</h4>
+        <h3 style="color:var(--red)">ADM</h3>
+        <div style="background:#111; padding:15px; border-radius:8px; border:1px solid var(--red);">
             <input type="text" id="adm-url" placeholder="URL" class="input-adm">
             <input type="text" id="adm-u" placeholder="Usuário" class="input-adm">
             <input type="text" id="adm-p" placeholder="Senha" class="input-adm">
-            <button onclick="salvarConfigServidor()" style="width:100%; padding:10px; background:#27ae60; border:none; border-radius:5px; color:white; font-weight:bold;">SALVAR IPTV</button>
+            <button onclick="salvarConfigServidor()" style="width:100%; padding:10px; background:#27ae60; border:none; border-radius:5px; color:white;">SALVAR IPTV</button>
         </div>
-
-        <div style="background:#111; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #444;">
-            <h4 style="margin:0 0 10px 0; font-size:12px;">NOVO / EDITAR USUÁRIO</h4>
-            <input type="hidden" id="edit-id"><input type="hidden" id="old-exp">
-            <input type="text" id="new-u" placeholder="Nome do Usuário" class="input-adm">
-            <input type="text" id="new-p" placeholder="Senha do Usuário" class="input-adm">
-            <input type="number" id="new-days" placeholder="Adicionar Dias (ex: 30)" class="input-adm">
-            <input type="number" id="new-screens" placeholder="Qtd Telas" class="input-adm" value="1">
-            <button onclick="salvarUsuario()" id="btn-save-adm" style="width:100%; padding:10px; background:var(--red); color:#fff; border:none; border-radius:5px; font-weight:bold;">SALVAR USUÁRIO</button>
-        </div>
-        <div id="lista-usuarios-adm"></div>
+        <div id="lista-usuarios-adm" style="margin-top:15px;"></div>
     </div>
 
-    <div id="modal-detalhes" class="modal"><span class="close-modal" onclick="fecharModais()">✕</span><div id="detalhes-body" style="text-align:center; max-width:500px; margin:40px auto; padding-bottom:50px;"></div></div>
+    <div id="modal-detalhes" class="modal"><span class="close-modal" onclick="fecharModais()">✕</span><div id="detalhes-body" style="text-align:center; max-width:500px; margin:40px auto;"></div></div>
     
     <div id="player-box">
-        <span class="close-modal" onclick="fecharPlayer()" style="left:15px; top:15px;">✕</span>
+        <span class="close-modal" onclick="fecharPlayer()" style="left:15px; top:15px; background:rgba(0,0,0,0.6); width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;">✕</span>
         <video id="vid" class="video-js vjs-fill vjs-big-play-centered" controls playsinline preload="auto"></video>
     </div>
 
@@ -118,7 +113,11 @@
         const FIREBASE = "https://cloneflix-16f9c-default-rtdb.firebaseio.com";
         const DB = `${FIREBASE}/usuarios`;
 
-        var player = videojs('vid', { fluid: true, autoplay: false });
+        var player = videojs('vid', { 
+            fluid: true, 
+            autoplay: false,
+            html5: { hls: { overrideNative: true }, nativeVideoTracks: false }
+        });
 
         var fullData = {};
         var currentLogged = {};
@@ -152,19 +151,6 @@
             for(let id in res) {
                 const user = res[id];
                 if(user.user === u && user.pass === p) {
-                    if(user.status === 'bloqueado') return alert("Conta bloqueada.");
-                    if(user.expira && user.expira < Date.now()) return alert("Conta vencida.");
-                    
-                    // Lógica de telas
-                    let myToken = localStorage.getItem('device_token');
-                    if(!user.adm) {
-                        if(user.current_token !== myToken) {
-                            if((user.online_count || 0) >= (user.screens || 1)) return alert("Limite de telas atingido!");
-                            if(!myToken) { myToken = Math.random().toString(36).substr(2, 9); localStorage.setItem('device_token', myToken); }
-                            await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: (user.online_count || 0) + 1, current_token: myToken }) });
-                        }
-                    }
-                    
                     localStorage.setItem('clone_creds', JSON.stringify({u, p}));
                     currentLogged = user; currentLogged.id = id; entrar(); return;
                 }
@@ -177,7 +163,7 @@
             document.getElementById('app-ui').style.display='block';
             if(currentLogged.adm) document.getElementById('adm-btn').style.display='block';
             const exp = currentLogged.expira ? new Date(currentLogged.expira).toLocaleDateString() : "Vitalício";
-            document.getElementById('welcome-msg').innerHTML = `Olá, <b>${currentLogged.user}</b> | Vence: <b>${exp}</b>`;
+            document.getElementById('welcome-msg').innerHTML = `Olá, <b>${currentLogged.user}</b> | Vencimento: <b>${exp}</b>`;
             mudarSecao('live');
         }
 
@@ -185,14 +171,16 @@
             secaoAtual = tipo;
             if(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
             const principal = document.getElementById('conteudo-principal');
-            principal.innerHTML = '<p style="text-align:center;color:red;">Sincronizando...</p>';
+            principal.innerHTML = '<div style="text-align:center; padding:50px;"><div style="border:3px solid #333; border-top:3px solid red; border-radius:50%; width:30px; height:30px; animation:spin 1s linear infinite; margin:0 auto;"></div></div>';
             
             const catAct = tipo==='live'?'get_live_categories':tipo==='movie'?'get_vod_categories':'get_series_categories';
             const streamAct = tipo==='live'?'get_live_streams':tipo==='movie'?'get_vod_streams':'get_series';
             
             try {
-                const cats = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json());
-                const streams = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json());
+                const [cats, streams] = await Promise.all([
+                    fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json()),
+                    fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json())
+                ]);
                 fullData[tipo] = streams; 
                 renderizar(cats, streams, tipo);
             } catch(e) { principal.innerHTML = '<p style="text-align:center;">Erro de conexão.</p>'; }
@@ -200,10 +188,10 @@
 
         function renderizar(cats, streams, tipo) {
             let html = "";
-            cats.slice(0, 30).forEach(cat => {
+            cats.slice(0, 40).forEach(cat => {
                 const itens = streams.filter(s => s.category_id === cat.category_id);
                 if(itens.length > 0) {
-                    html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 15).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
+                    html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER TUDO</button></div><div class="shelf">${itens.slice(0, 15).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
                 }
             });
             document.getElementById('conteudo-principal').innerHTML = html;
@@ -219,104 +207,104 @@
             </div>`;
         }
 
-        // PLAYER HÍBRIDO COM TRÊS TENTATIVAS
+        // --- NOVA LÓGICA DE PLAYER ULTRA COMPATÍVEL ---
         async function play(id, ext, tipo) {
+            document.getElementById('loading-overlay').style.display = 'flex';
             document.getElementById('player-box').style.display = 'block';
             player.reset();
 
             const urlBase = `${API.url}/${tipo==='live'?'live':tipo==='movie'?'movie':'series'}/${API.u}/${API.p}/${id}`;
-            const formats = tipo === 'live' ? ['m3u8'] : [ext || 'mp4', 'm3u8', '']; // Tenta ext original, m3u8 e depois sem nada
+            
+            // Tentativas inteligentes de extensões
+            let extensionList = [];
+            if(tipo === 'live') {
+                extensionList = ['m3u8', 'ts', ''];
+            } else {
+                // Tenta extensão da API, depois mp4, depois m3u8, depois sem nada
+                extensionList = [ext, 'mp4', 'm3u8', 'ts', 'mkv', ''];
+            }
 
-            async function tryPlay(index) {
-                if (index >= formats.length) {
-                    alert("Este conteúdo não pode ser reproduzido neste navegador.");
+            // Remove duplicados e undefined
+            extensionList = [...new Set(extensionList.filter(e => e !== undefined))];
+
+            async function startAttempt(idx) {
+                if (idx >= extensionList.length) {
+                    document.getElementById('loading-overlay').style.display = 'none';
+                    alert("Formato não suportado por este dispositivo. Tente outro conteúdo.");
                     fecharPlayer();
                     return;
                 }
 
-                let finalUrl = formats[index] ? `${urlBase}.${formats[index]}` : urlBase;
-                let type = (formats[index] === 'm3u8' || tipo === 'live') ? 'application/x-mpegURL' : 'video/mp4';
+                let currentExt = extensionList[idx];
+                let finalUrl = currentExt ? `${urlBase}.${currentExt}` : urlBase;
+                
+                // Força o tipo de MIME dependendo da tentativa
+                let mimeType = 'video/mp4';
+                if(currentExt === 'm3u8' || tipo === 'live') mimeType = 'application/x-mpegURL';
+                if(currentExt === 'ts') mimeType = 'video/mp2t';
 
-                console.log("Tentando rodar:", finalUrl);
-                player.src({ src: finalUrl, type: type });
+                console.log("Tentando reproduzir via: " + finalUrl);
+
+                player.src({ src: finalUrl, type: mimeType });
                 
                 player.ready(() => {
-                    player.play().catch(() => {
-                        console.log("Falhou formato", index, "tentando o próximo...");
-                        tryPlay(index + 1);
-                    });
+                    let promise = player.play();
+                    if (promise !== undefined) {
+                        promise.then(() => {
+                            document.getElementById('loading-overlay').style.display = 'none';
+                        }).catch(() => {
+                            console.log("Falha no formato " + currentExt + ". Tentando próximo...");
+                            startAttempt(idx + 1);
+                        });
+                    }
                 });
             }
 
-            tryPlay(0);
+            startAttempt(0);
         }
 
         async function abrirConteudo(id, tipo) {
             if(tipo === 'live') return play(id, 'm3u8', 'live');
+            document.getElementById('loading-overlay').style.display = 'flex';
             const action = tipo === 'series' ? 'get_series_info' : 'get_vod_info';
             const param = tipo === 'series' ? 'series_id' : 'vod_id';
-            const res = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${action}&${param}=${id}`).then(r => r.json());
-            const info = res.info || res.movie_data || {};
-            const ext = info.container_extension || (res.movie_data && res.movie_data.container_extension) || 'mp4';
             
-            let html = `<img src="${info.cover || info.movie_image}" style="width:180px; border-radius:8px;"><h2>${info.name}</h2><p style="font-size:12px;color:#ccc;">${info.plot || 'Sem sinopse.'}</p>`;
-            
-            if(tipo === 'series') {
-                window.tempEps = res.episodes;
-                html += `<select class="input-adm" onchange="carregarEps(this.value)"><option value="">Selecione Temporada</option>${Object.keys(res.episodes).map(s => `<option value="${s}">Temp ${s}</option>`).join('')}</select><div id="eps-box" style="max-height:250px; overflow-y:auto;"></div>`;
-            } else {
-                html += `<button onclick="play('${id}','${ext}','movie')" style="width:90%; padding:15px; background:var(--red); color:white; border:none; border-radius:5px; font-weight:bold;">ASSISTIR AGORA</button>`;
-            }
-            document.getElementById('detalhes-body').innerHTML = html;
-            document.getElementById('modal-detalhes').style.display = 'block';
+            try {
+                const res = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${action}&${param}=${id}`).then(r => r.json());
+                const info = res.info || res.movie_data || {};
+                const extension = info.container_extension || (res.movie_data && res.movie_data.container_extension) || 'mp4';
+                
+                let html = `<img src="${info.cover || info.movie_image}" style="width:180px; border-radius:8px; margin-bottom:15px; box-shadow:0 0 20px #000;"><h2>${info.name}</h2><p style="color:#aaa; font-size:13px; padding:0 20px;">${info.plot || 'Nenhuma descrição encontrada.'}</p>`;
+                
+                if(tipo === 'series') {
+                    window.tempEps = res.episodes;
+                    html += `<select class="input-adm" style="width:90%" onchange="carregarEps(this.value)"><option value="">Selecione Temporada</option>${Object.keys(res.episodes).map(s => `<option value="${s}">Temp ${s}</option>`).join('')}</select><div id="eps-box" style="max-height:280px; overflow-y:auto; margin-top:10px;"></div>`;
+                } else {
+                    html += `<button onclick="play('${id}','${extension}','movie')" style="width:90%; padding:15px; background:var(--red); color:white; border:none; border-radius:5px; font-weight:bold; margin-top:20px;">REPRODUZIR FILME</button>`;
+                }
+                document.getElementById('detalhes-body').innerHTML = html;
+                document.getElementById('modal-detalhes').style.display = 'block';
+            } catch(e) { alert("Erro ao carregar detalhes."); }
+            finally { document.getElementById('loading-overlay').style.display = 'none'; }
         }
 
         function carregarEps(s) {
             if(!s || !window.tempEps[s]) return;
             document.getElementById('eps-box').innerHTML = window.tempEps[s].map(e => `
-                <div style="padding:10px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
-                    <span>E${e.episode_num} - ${e.title}</span>
-                    <button onclick="play('${e.id || e.stream_id}','${e.container_extension || 'mp4'}','series')" style="background:var(--red); border:none; color:white; padding:5px 10px; border-radius:4px;">PLAY</button>
+                <div style="padding:15px; border-bottom:1px solid #222; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-size:13px;">E${e.episode_num} - ${e.title}</span>
+                    <button onclick="play('${e.id || e.stream_id}','${e.container_extension || 'mp4'}','series')" style="background:var(--red); border:none; color:white; padding:8px 15px; border-radius:5px;">ASSISTIR</button>
                 </div>
             `).join('');
         }
 
-        async function logout() {
-            if(currentLogged.id && !currentLogged.adm) {
-                const u = await fetch(`${DB}/${currentLogged.id}.json`).then(r => r.json());
-                await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: Math.max(0, (u.online_count || 1) - 1), current_token: null }) });
-            }
-            localStorage.clear(); location.reload();
-        }
-
-        // ADM FUNCTIONS
-        async function abrirADM() {
-            document.getElementById('modal-adm').style.display = 'block';
-            document.getElementById('adm-url').value = API.url; document.getElementById('adm-u').value = API.u; document.getElementById('adm-p').value = API.p;
-            const res = await fetch(`${DB}.json`).then(r => r.json()); 
-            let html = "";
-            for(let id in res) {
-                const u = res[id];
-                html += `<div class="user-card"><b>${u.user}</b> <span style="float:right;color:${u.status==='ativo'?'#2ecc71':'#e74c3c'}">${u.status}</span>
-                    <div class="user-info"><div>Senha: ${u.pass}</div><div>Telas: ${u.online_count||0}/${u.screens||1}</div><div style="grid-column:span 2">Exp: ${new Date(u.expira).toLocaleString()}</div></div>
-                    <div class="btn-adm-group">
-                        <button class="btn-adm" style="background:#3498db" onclick="prepararEdicao('${id}','${u.user}','${u.pass}','${u.screens}','${u.expira}')">Editar</button>
-                        <button class="btn-adm" style="background:#f39c12" onclick="toggleStatus('${id}','${u.status}')">Bloquear/Ativar</button>
-                        <button class="btn-adm" style="background:#95a5a6" onclick="resetTelas('${id}')">Reset Telas</button>
-                        <button class="btn-adm" style="background:#e74c3c" onclick="excluirUser('${id}')">Apagar</button>
-                    </div></div>`;
-            }
-            document.getElementById('lista-usuarios-adm').innerHTML = html;
-        }
-
-        async function salvarUsuario() {
-            const id = document.getElementById('edit-id').value;
-            const days = parseInt(document.getElementById('new-days').value) || 0;
-            const exp = (id && days === 0) ? parseInt(document.getElementById('old-exp').value) : Date.now() + (days * 86400000);
-            const obj = { user: document.getElementById('new-u').value, pass: document.getElementById('new-p').value, screens: parseInt(document.getElementById('new-screens').value) || 1, expira: exp, status: 'ativo', online_count: 0 };
-            await fetch(id ? `${DB}/${id}.json` : `${DB}.json`, { method: id?'PATCH':'POST', body: JSON.stringify(obj) });
-            alert("Sucesso!"); abrirADM(); limparFormADM();
-        }
+        function fecharPlayer() { player.pause(); document.getElementById('player-box').style.display='none'; document.getElementById('loading-overlay').style.display='none'; }
+        function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
+        function logout() { localStorage.clear(); location.reload(); }
+        function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:18px;">← Voltar</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; window.scrollTo(0,0); }
+        function executarBusca(q) { if(!q) return mudarSecao(secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 40); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
+        async function toggleFav(e, id, t, n, img) { e.stopPropagation(); let f = currentLogged.favs || []; const idx = f.findIndex(x => x.id === String(id)); if(idx > -1) f.splice(idx, 1); else f.push({id: String(id), tipo:t, name:n, img:img}); currentLogged.favs = f; await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ favs: f }) }); e.target.classList.toggle('active'); }
+        function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; document.getElementById('conteudo-principal').innerHTML = f.length ? `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>` : `<p style="text-align:center; padding-top:40px;">Sua lista está vazia.</p>`; }
 
         async function salvarConfigServidor() {
             const cfg = { url: document.getElementById('adm-url').value, u: document.getElementById('adm-u').value, p: document.getElementById('adm-p').value };
@@ -324,19 +312,16 @@
             alert("IPTV Salvo!"); location.reload();
         }
 
-        function prepararEdicao(id, u, p, s, exp) { document.getElementById('edit-id').value = id; document.getElementById('old-exp').value = exp; document.getElementById('new-u').value = u; document.getElementById('new-p').value = p; document.getElementById('new-screens').value = s; document.getElementById('btn-save-adm').innerText = "ATUALIZAR USUÁRIO"; }
-        function limparFormADM() { document.getElementById('edit-id').value = ""; document.getElementById('new-u').value = ""; document.getElementById('new-p').value = ""; document.getElementById('new-days').value = ""; document.getElementById('btn-save-adm').innerText = "SALVAR USUÁRIO"; }
-        async function resetTelas(id) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: 0, current_token: null }) }); abrirADM(); }
-        async function toggleStatus(id, s) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ status: s==='ativo'?'bloqueado':'ativo' }) }); abrirADM(); }
-        async function excluirUser(id) { if(confirm("Excluir?")) { await fetch(`${DB}/${id}.json`, { method: 'DELETE' }); abrirADM(); } }
-        
-        // Utils
-        function fecharPlayer() { player.pause(); document.getElementById('player-box').style.display='none'; }
-        function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
-        function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
-        function executarBusca(q) { if(!q) return mudarSecao(secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 30); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
-        async function toggleFav(e, id, t, n, img) { e.stopPropagation(); let f = currentLogged.favs || []; const idx = f.findIndex(x => x.id === String(id)); if(idx > -1) f.splice(idx, 1); else f.push({id: String(id), tipo:t, name:n, img:img}); currentLogged.favs = f; await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ favs: f }) }); e.target.classList.toggle('active'); }
-        function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; document.getElementById('conteudo-principal').innerHTML = f.length ? `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>` : `<p style="text-align:center;">Vazio.</p>`; }
+        async function abrirADM() {
+            document.getElementById('modal-adm').style.display = 'block';
+            const res = await fetch(`${DB}.json`).then(r => r.json()); 
+            let html = "";
+            for(let id in res) {
+                const u = res[id];
+                html += `<div class="user-card"><b>${u.user}</b> <span style="float:right; color:#2ecc71;">Ativo</span><br><small>Exp: ${new Date(u.expira).toLocaleDateString()}</small></div>`;
+            }
+            document.getElementById('lista-usuarios-adm').innerHTML = html;
+        }
     </script>
 </body>
 </html>
