@@ -30,22 +30,19 @@
         .card { min-width: 105px; border-radius: 5px; overflow: hidden; background: var(--card-bg); border: 1px solid #222; position: relative; cursor: pointer; }
         .card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
         .card-name { padding: 5px; font-size: 9px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .fav-star { position: absolute; top: 5px; right: 5px; font-size: 18px; text-shadow: 0 0 5px #000; cursor: pointer; z-index: 10; color: #ccc; transition: color 0.2s; }
+        .fav-star { position: absolute; top: 5px; right: 5px; font-size: 18px; text-shadow: 0 0 5px #000; color: #ccc; z-index: 10; }
         .fav-star.active { color: var(--yellow); }
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 1000; overflow-y: auto; padding: 15px; }
         .close-modal { position: absolute; top: 15px; right: 15px; font-size: 28px; color: #fff; cursor: pointer; z-index: 1001; }
         .user-card { background: #111; padding: 12px; border-radius: 10px; margin-bottom: 12px; border: 1px solid #333; }
         .user-info { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 10px; margin: 8px 0; }
         .btn-adm-group { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
-        .btn-adm { border: none; padding: 8px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #fff; text-transform: uppercase; cursor: pointer; }
+        .btn-adm { border: none; padding: 8px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #fff; cursor: pointer; }
         .input-adm { width: 100%; padding: 10px; margin-bottom: 10px; background: #222; border: 1px solid #333; color: #fff; border-radius: 5px; box-sizing: border-box; }
         #player-box { display: none; position: fixed; inset: 0; background: #000; z-index: 2000; }
-        #no-sleep-video { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0.01; pointer-events: none; }
     </style>
 </head>
 <body>
-
-    <video id="no-sleep-video" loop muted playsinline style="display:none;"></video>
 
     <div id="login-ui">
         <div style="position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; z-index: 9999;">
@@ -87,53 +84,45 @@
     <div id="modal-adm" class="modal">
         <span class="close-modal" onclick="fecharModais()">✕</span>
         <h3 style="color:var(--red)">PAINEL ADM</h3>
+        
         <div style="background:#111; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid var(--red);">
-            <h4 style="margin:0 0 10px 0; font-size:12px; color:var(--red);">SERVIDOR IPTV (DNS/LOGIN)</h4>
-            <input type="text" id="adm-url" placeholder="URL do Servidor" class="input-adm">
-            <input type="text" id="adm-u" placeholder="Usuário Painel" class="input-adm">
-            <input type="text" id="adm-p" placeholder="Senha Painel" class="input-adm">
-            <button onclick="salvarConfigServidor()" style="width:100%; padding:10px; background:#27ae60; color:#fff; border:none; border-radius:5px; font-weight:bold;">SALVAR E SINCRONIZAR TUDO</button>
+            <h4 style="margin:0 0 10px 0; font-size:12px; color:var(--red);">SERVIDOR IPTV</h4>
+            <input type="text" id="adm-url" placeholder="URL" class="input-adm">
+            <input type="text" id="adm-u" placeholder="Usuário" class="input-adm">
+            <input type="text" id="adm-p" placeholder="Senha" class="input-adm">
+            <button onclick="salvarConfigServidor()" style="width:100%; padding:10px; background:#27ae60; border:none; border-radius:5px; color:white; font-weight:bold;">SALVAR IPTV</button>
         </div>
-        <div id="adm-form" style="background:#111; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #444;">
-            <h4 style="margin:0 0 10px 0; font-size:12px;">GERENCIAR USUÁRIO</h4>
+
+        <div style="background:#111; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #444;">
+            <h4 style="margin:0 0 10px 0; font-size:12px;">NOVO / EDITAR USUÁRIO</h4>
             <input type="hidden" id="edit-id"><input type="hidden" id="old-exp">
-            <input type="text" id="new-u" placeholder="Usuário" class="input-adm">
-            <input type="text" id="new-p" placeholder="Senha" class="input-adm">
-            <input type="number" id="new-days" placeholder="Dias (0 mantém)" class="input-adm">
-            <input type="number" id="new-screens" placeholder="Telas" class="input-adm" value="1">
+            <input type="text" id="new-u" placeholder="Nome do Usuário" class="input-adm">
+            <input type="text" id="new-p" placeholder="Senha do Usuário" class="input-adm">
+            <input type="number" id="new-days" placeholder="Adicionar Dias (ex: 30)" class="input-adm">
+            <input type="number" id="new-screens" placeholder="Qtd Telas" class="input-adm" value="1">
             <button onclick="salvarUsuario()" id="btn-save-adm" style="width:100%; padding:10px; background:var(--red); color:#fff; border:none; border-radius:5px; font-weight:bold;">SALVAR USUÁRIO</button>
         </div>
         <div id="lista-usuarios-adm"></div>
     </div>
 
     <div id="modal-detalhes" class="modal"><span class="close-modal" onclick="fecharModais()">✕</span><div id="detalhes-body" style="text-align:center; max-width:500px; margin:40px auto; padding-bottom:50px;"></div></div>
-    <div id="player-box"><span class="close-modal" onclick="fecharPlayer()" style="left:15px; top:15px;">✕</span><video id="vid" class="video-js vjs-fill vjs-big-play-centered" controls></video></div>
+    
+    <div id="player-box">
+        <span class="close-modal" onclick="fecharPlayer()" style="left:15px; top:15px;">✕</span>
+        <video id="vid" class="video-js vjs-fill vjs-big-play-centered" controls playsinline preload="auto"></video>
+    </div>
 
     <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
     <script>
-        const VERSION = "1.0.0"; 
         var API = { url: "http://lunnabr1.site", u: "35215954", p: "54642513" }; 
         const FIREBASE = "https://cloneflix-16f9c-default-rtdb.firebaseio.com";
         const DB = `${FIREBASE}/usuarios`;
 
-        var player = videojs('vid');
+        var player = videojs('vid', { fluid: true, autoplay: false });
+
         var fullData = {};
         var currentLogged = {};
         var secaoAtual = 'live';
-        var wakeLock = null;
-
-        async function manterTelaAtiva(ativo) {
-            const noSleepVid = document.getElementById('no-sleep-video');
-            if (ativo) {
-                try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (err) {}
-                noSleepVid.src = "data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDJpc29tYXZjMQAAAZptb292AAAAbG12aGQAAAAA36YnUd+mJ1EAAAPoAAAAKAABAAABAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAABemZyZWUAAAFVbWRhdGFhdmMxIDY0MHg0ODAAH/+AAAACHZpZGVvAAAAAAABAAAAAQAAABUAAAAAAAABAAEAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-                noSleepVid.play().catch(()=>{});
-            } else {
-                if (wakeLock) { wakeLock.release(); wakeLock = null; }
-                noSleepVid.pause();
-                noSleepVid.src = "";
-            }
-        }
 
         window.onload = async () => {
             await carregarConfiguracoes();
@@ -143,93 +132,78 @@
                 document.getElementById('user').value = c.u;
                 document.getElementById('pass').value = c.p;
                 autenticar(true);
-            } else { document.getElementById('login-status').innerText = "Pronto para entrar"; }
+            }
         };
 
         async function carregarConfiguracoes() {
             try {
                 const res = await fetch(`${FIREBASE}/config.json`).then(r => r.json());
-                if(res) {
-                    if(res.versao_atual && res.versao_atual !== VERSION) { return bloquearApp(res.link_apk, res.mensagem_att); }
-                    if(res.server && res.server.url) { API = res.server; }
-                }
+                if(res && res.server) API = res.server;
             } catch(e) {}
-        }
-
-        function bloquearApp(link, msg) {
-            document.body.innerHTML = `<div style="position:fixed;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:white;z-index:99999;padding:20px;">
-                <h1 style="color:#E50914">ATUALIZAÇÃO NECESSÁRIA</h1>
-                <p>${msg || "Uma nova versão do app está disponível!"}</p>
-                <button onclick="window.open('${link}','_blank')" style="padding:15px 30px;background:#E50914;color:white;border:none;border-radius:5px;font-weight:bold;margin-top:20px;">BAIXAR AGORA</button>
-            </div>`;
         }
 
         async function autenticar(isAuto = false) {
             const u = document.getElementById('user').value;
             const p = document.getElementById('pass').value;
             if(!u || !p) return;
-            if(u === "Rhuan" && p === "270412") { currentLogged = { user: "Rhuan", adm: true, screens: 99, favs: [] }; entrar(); return; }
+            if(u === "Rhuan" && p === "270412") { currentLogged = { user: "Rhuan", adm: true, favs: [] }; entrar(); return; }
+            
             const res = await fetch(`${DB}.json`).then(r => r.json());
             for(let id in res) {
                 const user = res[id];
                 if(user.user === u && user.pass === p) {
-                    if(user.status === 'bloqueado') return alert("Sua conta está SUSPENSA.");
-                    if(user.expira && user.expira < Date.now()) return alert("Sua conta VENCEU.");
+                    if(user.status === 'bloqueado') return alert("Conta bloqueada.");
+                    if(user.expira && user.expira < Date.now()) return alert("Conta vencida.");
+                    
+                    // Lógica de telas
                     let myToken = localStorage.getItem('device_token');
                     if(!user.adm) {
                         if(user.current_token !== myToken) {
-                            if((user.online_count || 0) >= (user.screens || 1)) return alert("Limite de telas!");
+                            if((user.online_count || 0) >= (user.screens || 1)) return alert("Limite de telas atingido!");
                             if(!myToken) { myToken = Math.random().toString(36).substr(2, 9); localStorage.setItem('device_token', myToken); }
                             await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: (user.online_count || 0) + 1, current_token: myToken }) });
                         }
                     }
+                    
                     localStorage.setItem('clone_creds', JSON.stringify({u, p}));
                     currentLogged = user; currentLogged.id = id; entrar(); return;
                 }
             }
-            if(!isAuto) alert("Usuário ou senha incorretos.");
+            if(!isAuto) alert("Login inválido.");
         }
 
         function entrar() {
             document.getElementById('login-ui').style.display='none';
             document.getElementById('app-ui').style.display='block';
             if(currentLogged.adm) document.getElementById('adm-btn').style.display='block';
-            const dt = currentLogged.expira ? new Date(currentLogged.expira) : null;
-            const expStr = dt ? dt.toLocaleDateString() : "Vitalício";
-            document.getElementById('welcome-msg').innerHTML = `Olá, <b>${currentLogged.user}</b> | Vence em: <b>${expStr}</b>`;
-            // INÍCIO RÁPIDO: Carrega as categorias primeiro, depois o conteúdo principal em background
+            const exp = currentLogged.expira ? new Date(currentLogged.expira).toLocaleDateString() : "Vitalício";
+            document.getElementById('welcome-msg').innerHTML = `Olá, <b>${currentLogged.user}</b> | Vence: <b>${exp}</b>`;
             mudarSecao('live');
         }
 
         async function mudarSecao(tipo, btn) {
             secaoAtual = tipo;
             if(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-            
             const principal = document.getElementById('conteudo-principal');
-            principal.innerHTML = '<p style="text-align:center;margin-top:20px;color:var(--red);">Carregando conteúdo...</p>';
-
+            principal.innerHTML = '<p style="text-align:center;color:red;">Sincronizando...</p>';
+            
             const catAct = tipo==='live'?'get_live_categories':tipo==='movie'?'get_vod_categories':'get_series_categories';
             const streamAct = tipo==='live'?'get_live_streams':tipo==='movie'?'get_vod_streams':'get_series';
             
             try {
-                // Carrega categorias primeiro para agilizar o visual
                 const cats = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json());
-                
-                // Carrega os streams separadamente para não travar a UI
                 const streams = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json());
-                
                 fullData[tipo] = streams; 
                 renderizar(cats, streams, tipo);
-            } catch(e) { principal.innerHTML = '<p style="text-align:center;color:white;">Erro ao conectar. Verifique sua rede.</p>'; }
+            } catch(e) { principal.innerHTML = '<p style="text-align:center;">Erro de conexão.</p>'; }
         }
 
         function renderizar(cats, streams, tipo) {
             let html = "";
-            // Mostra apenas as categorias que realmente têm conteúdo para poupar processamento
-            cats.slice(0, 15).forEach(cat => {
+            cats.slice(0, 30).forEach(cat => {
                 const itens = streams.filter(s => s.category_id === cat.category_id);
                 if(itens.length > 0) {
-                    html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
+                    html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 15).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
                 }
             });
             document.getElementById('conteudo-principal').innerHTML = html;
@@ -238,105 +212,131 @@
         function cardHtml(i, tipo) {
             const id = i.stream_id || i.series_id;
             const isFav = (currentLogged.favs || []).some(f => f.id === String(id));
-            const imgUrl = i.stream_icon || i.cover || i.img;
+            const img = i.stream_icon || i.cover || i.img;
             return `<div class="card">
-                <span class="fav-star ${isFav?'active':''}" onclick="toggleFav(event, '${id}','${tipo}','${i.name.replace(/'/g, "")}','${imgUrl}')">★</span>
-                <div onclick="abrirConteudo('${id}', '${tipo}')"><img loading="lazy" src="${imgUrl}" onerror="this.src='https://via.placeholder.com/150x225?text=Sem+Foto'"><div class="card-name">${i.name}</div></div>
+                <span class="fav-star ${isFav?'active':''}" onclick="toggleFav(event, '${id}','${tipo}','${i.name.replace(/'/g, "")}','${img}')">★</span>
+                <div onclick="abrirConteudo('${id}', '${tipo}')"><img loading="lazy" src="${img}" onerror="this.src='https://via.placeholder.com/150x225?text=Sem+Foto'"><div class="card-name">${i.name}</div></div>
             </div>`;
         }
 
+        // PLAYER HÍBRIDO COM TRÊS TENTATIVAS
         async function play(id, ext, tipo) {
-            let url = "";
-            if(tipo === 'live') url = `${API.url}/live/${API.u}/${API.p}/${id}.m3u8`;
-            else if (tipo === 'movie') url = `${API.url}/movie/${API.u}/${API.p}/${id}.${ext || 'mp4'}`;
-            else if (tipo === 'series') url = `${API.url}/series/${API.u}/${API.p}/${id}.${ext || 'mp4'}`;
-
             document.getElementById('player-box').style.display = 'block';
-            player.src({ src: url, type: tipo === 'live' ? 'application/x-mpegURL' : 'video/mp4' });
-            player.play();
-            manterTelaAtiva(true); 
+            player.reset();
+
+            const urlBase = `${API.url}/${tipo==='live'?'live':tipo==='movie'?'movie':'series'}/${API.u}/${API.p}/${id}`;
+            const formats = tipo === 'live' ? ['m3u8'] : [ext || 'mp4', 'm3u8', '']; // Tenta ext original, m3u8 e depois sem nada
+
+            async function tryPlay(index) {
+                if (index >= formats.length) {
+                    alert("Este conteúdo não pode ser reproduzido neste navegador.");
+                    fecharPlayer();
+                    return;
+                }
+
+                let finalUrl = formats[index] ? `${urlBase}.${formats[index]}` : urlBase;
+                let type = (formats[index] === 'm3u8' || tipo === 'live') ? 'application/x-mpegURL' : 'video/mp4';
+
+                console.log("Tentando rodar:", finalUrl);
+                player.src({ src: finalUrl, type: type });
+                
+                player.ready(() => {
+                    player.play().catch(() => {
+                        console.log("Falhou formato", index, "tentando o próximo...");
+                        tryPlay(index + 1);
+                    });
+                });
+            }
+
+            tryPlay(0);
         }
 
-        async function fecharPlayer() { 
-            player.pause(); 
-            document.getElementById('player-box').style.display='none'; 
-            manterTelaAtiva(false); 
-        }
-
-        async function abrirConteudo(id, tipo) { 
-            if(tipo === 'live') return play(id, 'm3u8', 'live'); 
+        async function abrirConteudo(id, tipo) {
+            if(tipo === 'live') return play(id, 'm3u8', 'live');
             const action = tipo === 'series' ? 'get_series_info' : 'get_vod_info';
             const param = tipo === 'series' ? 'series_id' : 'vod_id';
-            const res = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${action}&${param}=${id}`).then(r => r.json()); 
-            const info = res.info || res.movie_data; 
-            let html = `<img src="${info.cover || info.movie_image}" style="width:180px; border-radius:8px;"><h2>${info.name}</h2><p style="font-size:13px; color:#ccc; padding:0 20px;">${info.plot || 'Sem sinopse.'}</p>`; 
-            if(tipo === 'series') { 
-                window.tempEps = res.episodes; 
-                html += `<select class="input-adm" onchange="carregarEps(this.value)"><option value="">Selecione a Temporada</option>${Object.keys(res.episodes).map(s => `<option value="${s}">Temporada ${s}</option>`).join('')}</select><div id="eps-box" style="max-height:300px; overflow-y:auto; margin-top:10px;"></div>`; 
-            } else { 
-                const ext = info.container_extension || 'mp4';
-                html += `<button onclick="play('${id}','${ext}','movie')" style="width:90%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px; margin-top:15px;">ASSISTIR AGORA</button>`; 
-            } 
-            document.getElementById('detalhes-body').innerHTML = html; 
-            document.getElementById('modal-detalhes').style.display = 'block'; 
+            const res = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${action}&${param}=${id}`).then(r => r.json());
+            const info = res.info || res.movie_data || {};
+            const ext = info.container_extension || (res.movie_data && res.movie_data.container_extension) || 'mp4';
+            
+            let html = `<img src="${info.cover || info.movie_image}" style="width:180px; border-radius:8px;"><h2>${info.name}</h2><p style="font-size:12px;color:#ccc;">${info.plot || 'Sem sinopse.'}</p>`;
+            
+            if(tipo === 'series') {
+                window.tempEps = res.episodes;
+                html += `<select class="input-adm" onchange="carregarEps(this.value)"><option value="">Selecione Temporada</option>${Object.keys(res.episodes).map(s => `<option value="${s}">Temp ${s}</option>`).join('')}</select><div id="eps-box" style="max-height:250px; overflow-y:auto;"></div>`;
+            } else {
+                html += `<button onclick="play('${id}','${ext}','movie')" style="width:90%; padding:15px; background:var(--red); color:white; border:none; border-radius:5px; font-weight:bold;">ASSISTIR AGORA</button>`;
+            }
+            document.getElementById('detalhes-body').innerHTML = html;
+            document.getElementById('modal-detalhes').style.display = 'block';
         }
 
-        function carregarEps(s) { 
-            if(!s || !window.tempEps[s]) return; 
-            document.getElementById('eps-box').innerHTML = window.tempEps[s].map(e => {
-                const epId = e.id || e.stream_id;
-                const ext = e.container_extension || 'mp4';
-                return `<div style="padding:12px; border-bottom:1px solid #222; display:flex; justify-content:space-between; align-items:center; text-align:left;">
-                    <span style="font-size:12px;">E${e.episode_num} - ${e.title}</span>
-                    <button onclick="play('${epId}','${ext}','series')" style="background:var(--red); border:none; color:white; padding:6px 12px; border-radius:4px; font-size:10px; font-weight:bold;">PLAY</button>
-                </div>`;
-            }).join(''); 
+        function carregarEps(s) {
+            if(!s || !window.tempEps[s]) return;
+            document.getElementById('eps-box').innerHTML = window.tempEps[s].map(e => `
+                <div style="padding:10px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+                    <span>E${e.episode_num} - ${e.title}</span>
+                    <button onclick="play('${e.id || e.stream_id}','${e.container_extension || 'mp4'}','series')" style="background:var(--red); border:none; color:white; padding:5px 10px; border-radius:4px;">PLAY</button>
+                </div>
+            `).join('');
         }
 
         async function logout() {
             if(currentLogged.id && !currentLogged.adm) {
-                const check = await fetch(`${DB}/${currentLogged.id}.json`).then(r => r.json());
-                await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: Math.max(0, (check.online_count || 1) - 1), current_token: null }) });
+                const u = await fetch(`${DB}/${currentLogged.id}.json`).then(r => r.json());
+                await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: Math.max(0, (u.online_count || 1) - 1), current_token: null }) });
             }
             localStorage.clear(); location.reload();
         }
 
-        function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; window.scrollTo(0,0); }
-        function executarBusca(q) { if(!q) return mudarSecao(secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 30); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
-        function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
-        async function toggleFav(event, id, tipo, name, img) { event.stopPropagation(); if(!currentLogged.id) return; let f = currentLogged.favs || []; const idx = f.findIndex(x => x.id === String(id)); if(idx > -1) { f.splice(idx, 1); event.target.classList.remove('active'); } else { f.push({id: String(id), tipo, name, img}); event.target.classList.add('active'); } currentLogged.favs = f; await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ favs: f }) }); }
-        function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; let html = `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>`; document.getElementById('conteudo-principal').innerHTML = f.length ? html : `<p style="text-align:center;margin-top:40px">Lista vazia.</p>`; }
-
-        async function abrirADM() { 
-            document.getElementById('modal-adm').style.display = 'block'; 
+        // ADM FUNCTIONS
+        async function abrirADM() {
+            document.getElementById('modal-adm').style.display = 'block';
             document.getElementById('adm-url').value = API.url; document.getElementById('adm-u').value = API.u; document.getElementById('adm-p').value = API.p;
-            const res = await fetch(`${DB}.json`).then(r => r.json()); let html = ""; 
-            for(let id in res) { 
-                const u = res[id]; const st = u.status || 'ativo'; 
-                html += `<div class="user-card"><b>${u.user}</b> <span style="float:right;color:${st==='ativo'?'#27ae60':'#c0392b'}">${st.toUpperCase()}</span><div class="user-info"><div>S: ${u.pass}</div><div>Telas: ${u.online_count||0}/${u.screens||1}</div><div style="grid-column:span 2">Vence: ${new Date(u.expira).toLocaleString()}</div></div><div class="btn-adm-group"><button class="btn-adm" style="background:#2980b9" onclick="prepararEdicao('${id}','${u.user}','${u.pass}','${u.screens}','${u.expira}')">Editar</button><button class="btn-adm" style="background:#d35400" onclick="toggleStatus('${id}','${st}')">${st==='ativo'?'Bloquear':'Ativar'}</button><button class="btn-adm" style="background:#7f8c8d" onclick="resetTelas('${id}')">Reset</button><button class="btn-adm" style="background:#c0392b" onclick="excluirUser('${id}')">Apagar</button></div></div>`; 
-            } 
-            document.getElementById('lista-usuarios-adm').innerHTML = html; 
+            const res = await fetch(`${DB}.json`).then(r => r.json()); 
+            let html = "";
+            for(let id in res) {
+                const u = res[id];
+                html += `<div class="user-card"><b>${u.user}</b> <span style="float:right;color:${u.status==='ativo'?'#2ecc71':'#e74c3c'}">${u.status}</span>
+                    <div class="user-info"><div>Senha: ${u.pass}</div><div>Telas: ${u.online_count||0}/${u.screens||1}</div><div style="grid-column:span 2">Exp: ${new Date(u.expira).toLocaleString()}</div></div>
+                    <div class="btn-adm-group">
+                        <button class="btn-adm" style="background:#3498db" onclick="prepararEdicao('${id}','${u.user}','${u.pass}','${u.screens}','${u.expira}')">Editar</button>
+                        <button class="btn-adm" style="background:#f39c12" onclick="toggleStatus('${id}','${u.status}')">Bloquear/Ativar</button>
+                        <button class="btn-adm" style="background:#95a5a6" onclick="resetTelas('${id}')">Reset Telas</button>
+                        <button class="btn-adm" style="background:#e74c3c" onclick="excluirUser('${id}')">Apagar</button>
+                    </div></div>`;
+            }
+            document.getElementById('lista-usuarios-adm').innerHTML = html;
         }
 
-        async function salvarUsuario() { 
-            const id = document.getElementById('edit-id').value; const days = document.getElementById('new-days').value; const oldExp = document.getElementById('old-exp').value; 
-            const expFinal = (days && parseInt(days) > 0) ? Date.now() + (days * 86400000) : (id ? parseInt(oldExp) : Date.now() + (30 * 86400000)); 
-            const obj = { user: document.getElementById('new-u').value, pass: document.getElementById('new-p').value, screens: parseInt(document.getElementById('new-screens').value) || 1, expira: expFinal, status: 'ativo', online_count: 0, current_token: null }; 
-            await fetch(id ? `${DB}/${id}.json` : `${DB}.json`, { method: id?'PATCH':'POST', body: JSON.stringify(obj) }); alert("Sucesso!"); abrirADM(); limparFormADM(); 
+        async function salvarUsuario() {
+            const id = document.getElementById('edit-id').value;
+            const days = parseInt(document.getElementById('new-days').value) || 0;
+            const exp = (id && days === 0) ? parseInt(document.getElementById('old-exp').value) : Date.now() + (days * 86400000);
+            const obj = { user: document.getElementById('new-u').value, pass: document.getElementById('new-p').value, screens: parseInt(document.getElementById('new-screens').value) || 1, expira: exp, status: 'ativo', online_count: 0 };
+            await fetch(id ? `${DB}/${id}.json` : `${DB}.json`, { method: id?'PATCH':'POST', body: JSON.stringify(obj) });
+            alert("Sucesso!"); abrirADM(); limparFormADM();
         }
 
         async function salvarConfigServidor() {
-            const novaConfig = { url: document.getElementById('adm-url').value, u: document.getElementById('adm-u').value, p: document.getElementById('adm-p').value };
-            if(!novaConfig.url || !novaConfig.u || !novaConfig.p) return alert("Preencha tudo!");
-            const fullConfig = { versao_atual: VERSION, link_apk: "http://link.com", mensagem_att: "Nova versão", server: novaConfig };
-            try { await fetch(`${FIREBASE}/config.json`, { method: 'PUT', body: JSON.stringify(fullConfig) }); alert("Sincronizado!"); location.reload(); } catch(e) { alert("Erro ao salvar."); }
+            const cfg = { url: document.getElementById('adm-url').value, u: document.getElementById('adm-u').value, p: document.getElementById('adm-p').value };
+            await fetch(`${FIREBASE}/config.json`, { method: 'PUT', body: JSON.stringify({server: cfg}) });
+            alert("IPTV Salvo!"); location.reload();
         }
 
-        function prepararEdicao(id, u, p, s, exp) { document.getElementById('edit-id').value = id; document.getElementById('old-exp').value = exp; document.getElementById('new-u').value = u; document.getElementById('new-p').value = p; document.getElementById('new-screens').value = s; document.getElementById('btn-save-adm').innerText = "ATUALIZAR"; }
-        function limparFormADM() { document.getElementById('edit-id').value = ""; document.getElementById('new-u').value = ""; document.getElementById('new-p').value = ""; document.getElementById('new-days').value = ""; document.getElementById('btn-save-adm').innerText = "SALVAR"; }
-        async function toggleStatus(id, s) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ status: s==='ativo'?'bloqueado':'ativo' }) }); abrirADM(); }
+        function prepararEdicao(id, u, p, s, exp) { document.getElementById('edit-id').value = id; document.getElementById('old-exp').value = exp; document.getElementById('new-u').value = u; document.getElementById('new-p').value = p; document.getElementById('new-screens').value = s; document.getElementById('btn-save-adm').innerText = "ATUALIZAR USUÁRIO"; }
+        function limparFormADM() { document.getElementById('edit-id').value = ""; document.getElementById('new-u').value = ""; document.getElementById('new-p').value = ""; document.getElementById('new-days').value = ""; document.getElementById('btn-save-adm').innerText = "SALVAR USUÁRIO"; }
         async function resetTelas(id) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: 0, current_token: null }) }); abrirADM(); }
+        async function toggleStatus(id, s) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ status: s==='ativo'?'bloqueado':'ativo' }) }); abrirADM(); }
         async function excluirUser(id) { if(confirm("Excluir?")) { await fetch(`${DB}/${id}.json`, { method: 'DELETE' }); abrirADM(); } }
+        
+        // Utils
+        function fecharPlayer() { player.pause(); document.getElementById('player-box').style.display='none'; }
+        function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
+        function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
+        function executarBusca(q) { if(!q) return mudarSecao(secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 30); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
+        async function toggleFav(e, id, t, n, img) { e.stopPropagation(); let f = currentLogged.favs || []; const idx = f.findIndex(x => x.id === String(id)); if(idx > -1) f.splice(idx, 1); else f.push({id: String(id), tipo:t, name:n, img:img}); currentLogged.favs = f; await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ favs: f }) }); e.target.classList.toggle('active'); }
+        function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; document.getElementById('conteudo-principal').innerHTML = f.length ? `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>` : `<p style="text-align:center;">Vazio.</p>`; }
     </script>
 </body>
 </html>
