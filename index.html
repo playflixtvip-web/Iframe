@@ -116,7 +116,6 @@
         const FIREBASE = "https://cloneflix-16f9c-default-rtdb.firebaseio.com";
         const DB = `${FIREBASE}/usuarios`;
 
-        // PLAYER OTIMIZADO PARA LIVE (HLS)
         var player = videojs('vid', {
             html5: { vhs: { overrideNative: true, fastQualityChange: true } },
             liveui: true,
@@ -128,18 +127,37 @@
         var secaoAtual = 'live';
         var wakeLock = null;
 
+        // FUNÇÃO DE BLOQUEIO DE TELA REVISADA
         async function manterTelaAtiva(ativo) {
             const noSleepVid = document.getElementById('no-sleep-video');
             if (ativo) {
-                try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (err) {}
+                try {
+                    if ('wakeLock' in navigator) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        wakeLock.addEventListener('release', () => { console.log('Wake Lock liberado'); });
+                    }
+                } catch (err) { console.log("WakeLock API falhou, usando fallback de vídeo"); }
+                
+                // Fallback: Vídeo invisível de 1px
                 noSleepVid.style.display = "block";
                 noSleepVid.src = "data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDJpc29tYXZjMQAAAZptb292AAAAbG12aGQAAAAA36YnUd+mJ1EAAAPoAAAAKAABAAABAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAABemZyZWUAAAFVbWRhdGFhdmMxIDY0MHg0ODAAH/+AAAACHZpZGVvAAAAAAABAAAAAQAAABUAAAAAAAABAAEAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-                noSleepVid.play().catch(()=>{});
+                noSleepVid.play().catch(e => console.log("Erro no autoplay do no-sleep"));
             } else {
-                if (wakeLock) { wakeLock.release().then(() => { wakeLock = null; }); }
-                noSleepVid.pause(); noSleepVid.src = ""; noSleepVid.style.display = "none";
+                if (wakeLock !== null) {
+                    wakeLock.release().then(() => { wakeLock = null; });
+                }
+                noSleepVid.pause();
+                noSleepVid.src = "";
+                noSleepVid.style.display = "none";
             }
         }
+
+        // Reativar WakeLock se o usuário alternar abas e voltar
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                wakeLock = await navigator.wakeLock.request('screen');
+            }
+        });
 
         window.onload = async () => {
             await carregarConfiguracoes();
@@ -221,7 +239,6 @@
             } catch(e) { principal.innerHTML = '<p style="text-align:center;color:white;">Erro de conexão.</p>'; }
         }
 
-        // RENDERIZAÇÃO OTIMIZADA PARA NÃO TRAVAR O CELULAR
         function renderizar(cats, streams, tipo) {
             let html = "";
             cats.slice(0, 12).forEach(cat => {
@@ -251,11 +268,20 @@
 
             document.getElementById('player-box').style.display = 'block';
             player.src({ src: url, type: tipo === 'live' ? 'application/x-mpegURL' : 'video/mp4' });
+            
+            // Ativa o bloqueio de tela assim que o player inicia
+            player.one('playing', function() {
+                manterTelaAtiva(true);
+            });
+            
             player.play();
-            manterTelaAtiva(true);
         }
 
-        async function fecharPlayer() { player.pause(); document.getElementById('player-box').style.display='none'; manterTelaAtiva(false); }
+        async function fecharPlayer() { 
+            player.pause(); 
+            document.getElementById('player-box').style.display='none'; 
+            manterTelaAtiva(false); 
+        }
 
         async function abrirConteudo(id, tipo) { 
             if(tipo === 'live') return play(id, 'm3u8', 'live'); 
