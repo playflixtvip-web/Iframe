@@ -120,11 +120,10 @@
         var fullData = {};
         var currentLogged = {};
         var secaoAtual = 'live';
-        var wakeLock = null; // Controle de tela ligada
+        var wakeLock = null; 
 
         window.onload = async () => {
             await carregarConfiguracoes();
-            
             const saved = localStorage.getItem('clone_creds');
             if(saved) {
                 const c = JSON.parse(saved);
@@ -135,6 +134,22 @@
                 document.getElementById('login-status').innerText = "Pronto para entrar";
             }
         };
+
+        // Escutador para reativar WakeLock se a aba for minimizada e aberta novamente
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                ativarWakeLock();
+            }
+        });
+
+        async function ativarWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => { console.log('Wake Lock liberado'); });
+                }
+            } catch (err) { console.log(`${err.name}, ${err.message}`); }
+        }
 
         async function carregarConfiguracoes() {
             try {
@@ -281,15 +296,6 @@
             document.getElementById('conteudo-principal').innerHTML = f.length ? html : `<p style="text-align:center;margin-top:40px">Lista vazia.</p>`;
         }
 
-        // NOVO: Função para manter a tela ligada
-        async function ativarWakeLock() {
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                }
-            } catch (err) { console.log("WakeLock erro: " + err); }
-        }
-
         async function play(id, ext, tipo) {
             let url = "";
             if(tipo === 'live') url = `${API.url}/live/${API.u}/${API.p}/${id}.m3u8`;
@@ -299,14 +305,14 @@
             document.getElementById('player-box').style.display = 'block';
             player.src({ src: url, type: tipo === 'live' ? 'application/x-mpegURL' : 'video/mp4' });
             player.play();
-            ativarWakeLock(); // Ativa o bloqueio de tela ao dar play
+            ativarWakeLock(); // Força a tela a ficar ligada
         }
 
         async function fecharPlayer() { 
             player.pause(); 
             document.getElementById('player-box').style.display='none'; 
             if (wakeLock !== null) {
-                wakeLock.release().then(() => { wakeLock = null; }); // Libera a tela quando o player fecha
+                wakeLock.release().then(() => { wakeLock = null; });
             }
         }
 
