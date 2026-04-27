@@ -40,9 +40,12 @@
         .btn-adm { border: none; padding: 8px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #fff; text-transform: uppercase; cursor: pointer; }
         .input-adm { width: 100%; padding: 10px; margin-bottom: 10px; background: #222; border: 1px solid #333; color: #fff; border-radius: 5px; box-sizing: border-box; }
         #player-box { display: none; position: fixed; inset: 0; background: #000; z-index: 2000; }
+        #no-sleep-video { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0.01; pointer-events: none; }
     </style>
 </head>
 <body>
+
+    <video id="no-sleep-video" loop muted playsinline></video>
 
     <div id="login-ui">
         <div style="position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; z-index: 9999;">
@@ -84,7 +87,6 @@
     <div id="modal-adm" class="modal">
         <span class="close-modal" onclick="fecharModais()">✕</span>
         <h3 style="color:var(--red)">PAINEL ADM</h3>
-        
         <div style="background:#111; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid var(--red);">
             <h4 style="margin:0 0 10px 0; font-size:12px; color:var(--red);">SERVIDOR IPTV (DNS/LOGIN)</h4>
             <input type="text" id="adm-url" placeholder="URL do Servidor" class="input-adm">
@@ -92,7 +94,6 @@
             <input type="text" id="adm-p" placeholder="Senha Painel" class="input-adm">
             <button onclick="salvarConfigServidor()" style="width:100%; padding:10px; background:#27ae60; color:#fff; border:none; border-radius:5px; font-weight:bold;">SALVAR E SINCRONIZAR TUDO</button>
         </div>
-
         <div id="adm-form" style="background:#111; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #444;">
             <h4 style="margin:0 0 10px 0; font-size:12px;">GERENCIAR USUÁRIO</h4>
             <input type="hidden" id="edit-id"><input type="hidden" id="old-exp">
@@ -110,7 +111,6 @@
 
     <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
     <script>
-        // CONFIGURAÇÕES BASE
         const VERSION = "1.0.0"; 
         var API = { url: "http://lunnabr1.site", u: "35215954", p: "54642513" }; 
         const FIREBASE = "https://cloneflix-16f9c-default-rtdb.firebaseio.com";
@@ -120,7 +120,27 @@
         var fullData = {};
         var currentLogged = {};
         var secaoAtual = 'live';
-        var wakeLock = null; 
+        var wakeLock = null;
+
+        // FUNÇÃO DE BLOQUEIO DE TELA REFORÇADA
+        async function manterTelaAtiva(ativo) {
+            const noSleepVid = document.getElementById('no-sleep-video');
+            if (ativo) {
+                // 1. WakeLock API (Navegadores modernos)
+                try {
+                    if ('wakeLock' in navigator) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                    }
+                } catch (err) {}
+                // 2. Loop de vídeo invisível (Garante em celulares antigos/restritos)
+                noSleepVid.src = "https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3"; 
+                noSleepVid.play().catch(()=>{});
+            } else {
+                if (wakeLock) { wakeLock.release(); wakeLock = null; }
+                noSleepVid.pause();
+                noSleepVid.src = "";
+            }
+        }
 
         window.onload = async () => {
             await carregarConfiguracoes();
@@ -130,39 +150,17 @@
                 document.getElementById('user').value = c.u;
                 document.getElementById('pass').value = c.p;
                 autenticar(true);
-            } else {
-                document.getElementById('login-status').innerText = "Pronto para entrar";
-            }
+            } else { document.getElementById('login-status').innerText = "Pronto para entrar"; }
         };
-
-        // Escutador para reativar WakeLock se a aba for minimizada e aberta novamente
-        document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible') {
-                ativarWakeLock();
-            }
-        });
-
-        async function ativarWakeLock() {
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    wakeLock.addEventListener('release', () => { console.log('Wake Lock liberado'); });
-                }
-            } catch (err) { console.log(`${err.name}, ${err.message}`); }
-        }
 
         async function carregarConfiguracoes() {
             try {
                 const res = await fetch(`${FIREBASE}/config.json`).then(r => r.json());
                 if(res) {
-                    if(res.versao_atual && res.versao_atual !== VERSION) {
-                        return bloquearApp(res.link_apk, res.mensagem_att);
-                    }
-                    if(res.server && res.server.url) {
-                        API = res.server;
-                    }
+                    if(res.versao_atual && res.versao_atual !== VERSION) { return bloquearApp(res.link_apk, res.mensagem_att); }
+                    if(res.server && res.server.url) { API = res.server; }
                 }
-            } catch(e) { console.warn("Firebase vazio ou erro. Usando dados padrão."); }
+            } catch(e) {}
         }
 
         function bloquearApp(link, msg) {
@@ -173,33 +171,11 @@
             </div>`;
         }
 
-        async function salvarConfigServidor() {
-            const novaConfig = {
-                url: document.getElementById('adm-url').value,
-                u: document.getElementById('adm-u').value,
-                p: document.getElementById('adm-p').value
-            };
-            if(!novaConfig.url || !novaConfig.u || !novaConfig.p) return alert("Preencha todos os campos!");
-            const fullConfig = {
-                versao_atual: VERSION,
-                link_apk: "http://link.com",
-                mensagem_att: "Nova versão disponível",
-                server: novaConfig
-            };
-            try {
-                await fetch(`${FIREBASE}/config.json`, { method: 'PUT', body: JSON.stringify(fullConfig) });
-                alert("Sincronizado com sucesso! Reiniciando app...");
-                location.reload();
-            } catch(e) { alert("Erro ao salvar no Firebase."); }
-        }
-
         async function autenticar(isAuto = false) {
             const u = document.getElementById('user').value;
             const p = document.getElementById('pass').value;
             if(!u || !p) return;
-            if(u === "Rhuan" && p === "270412") {
-                currentLogged = { user: "Rhuan", adm: true, screens: 99, favs: [] }; entrar(); return;
-            }
+            if(u === "Rhuan" && p === "270412") { currentLogged = { user: "Rhuan", adm: true, screens: 99, favs: [] }; entrar(); return; }
             const res = await fetch(`${DB}.json`).then(r => r.json());
             for(let id in res) {
                 const user = res[id];
@@ -210,19 +186,12 @@
                     if(!user.adm) {
                         if(user.current_token !== myToken) {
                             if((user.online_count || 0) >= (user.screens || 1)) return alert("Limite de telas!");
-                            if(!myToken) {
-                                myToken = Math.random().toString(36).substr(2, 9);
-                                localStorage.setItem('device_token', myToken);
-                            }
-                            await fetch(`${DB}/${id}.json`, { 
-                                method: 'PATCH', 
-                                body: JSON.stringify({ online_count: (user.online_count || 0) + 1, current_token: myToken }) 
-                            });
+                            if(!myToken) { myToken = Math.random().toString(36).substr(2, 9); localStorage.setItem('device_token', myToken); }
+                            await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: (user.online_count || 0) + 1, current_token: myToken }) });
                         }
                     }
                     localStorage.setItem('clone_creds', JSON.stringify({u, p}));
-                    currentLogged = user; currentLogged.id = id;
-                    entrar(); return;
+                    currentLogged = user; currentLogged.id = id; entrar(); return;
                 }
             }
             if(!isAuto) alert("Usuário ou senha incorretos.");
@@ -240,10 +209,7 @@
 
         async function mudarSecao(tipo, btn) {
             secaoAtual = tipo;
-            if(btn) {
-                document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-            }
+            if(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
             const catAct = tipo==='live'?'get_live_categories':tipo==='movie'?'get_vod_categories':'get_series_categories';
             const streamAct = tipo==='live'?'get_live_streams':tipo==='movie'?'get_vod_streams':'get_series';
             try {
@@ -251,9 +217,8 @@
                     fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json()),
                     fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json())
                 ]);
-                fullData[tipo] = streams;
-                renderizar(cats, streams, tipo);
-            } catch(e) { alert("Erro ao conectar no servidor IPTV. Verifique o DNS no ADM."); }
+                fullData[tipo] = streams; renderizar(cats, streams, tipo);
+            } catch(e) { alert("Erro ao conectar no servidor IPTV."); }
         }
 
         function renderizar(cats, streams, tipo) {
@@ -277,25 +242,6 @@
             </div>`;
         }
 
-        async function toggleFav(event, id, tipo, name, img) {
-            event.stopPropagation();
-            if(!currentLogged.id) return;
-            let f = currentLogged.favs || [];
-            const idx = f.findIndex(x => x.id === String(id));
-            if(idx > -1) { f.splice(idx, 1); event.target.classList.remove('active'); } 
-            else { f.push({id: String(id), tipo, name, img}); event.target.classList.add('active'); }
-            currentLogged.favs = f;
-            await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ favs: f }) });
-        }
-
-        function mostrarFavoritos(btn) {
-            document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            const f = currentLogged.favs || [];
-            let html = `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>`;
-            document.getElementById('conteudo-principal').innerHTML = f.length ? html : `<p style="text-align:center;margin-top:40px">Lista vazia.</p>`;
-        }
-
         async function play(id, ext, tipo) {
             let url = "";
             if(tipo === 'live') url = `${API.url}/live/${API.u}/${API.p}/${id}.m3u8`;
@@ -305,29 +251,15 @@
             document.getElementById('player-box').style.display = 'block';
             player.src({ src: url, type: tipo === 'live' ? 'application/x-mpegURL' : 'video/mp4' });
             player.play();
-            ativarWakeLock(); // Força a tela a ficar ligada
+            manterTelaAtiva(true); // ATIVA O BLOQUEIO DE DESCANSO
         }
 
         async function fecharPlayer() { 
             player.pause(); 
             document.getElementById('player-box').style.display='none'; 
-            if (wakeLock !== null) {
-                wakeLock.release().then(() => { wakeLock = null; });
-            }
+            manterTelaAtiva(false); // DESATIVA O BLOQUEIO
         }
 
-        async function logout() {
-            if(currentLogged.id && !currentLogged.adm) {
-                const check = await fetch(`${DB}/${currentLogged.id}.json`).then(r => r.json());
-                await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: Math.max(0, (check.online_count || 1) - 1), current_token: null }) });
-            }
-            localStorage.clear();
-            location.reload();
-        }
-
-        function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; window.scrollTo(0,0); }
-        function executarBusca(q) { if(!q) return mudarSecao(secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 30); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
-        
         async function abrirConteudo(id, tipo) { 
             if(tipo === 'live') return play(id, 'm3u8', 'live'); 
             const action = tipo === 'series' ? 'get_series_info' : 'get_vod_info';
@@ -358,15 +290,24 @@
             }).join(''); 
         }
 
+        async function logout() {
+            if(currentLogged.id && !currentLogged.adm) {
+                const check = await fetch(`${DB}/${currentLogged.id}.json`).then(r => r.json());
+                await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: Math.max(0, (check.online_count || 1) - 1), current_token: null }) });
+            }
+            localStorage.clear(); location.reload();
+        }
+
+        function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; window.scrollTo(0,0); }
+        function executarBusca(q) { if(!q) return mudarSecao(secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 30); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
         function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
+        async function toggleFav(event, id, tipo, name, img) { event.stopPropagation(); if(!currentLogged.id) return; let f = currentLogged.favs || []; const idx = f.findIndex(x => x.id === String(id)); if(idx > -1) { f.splice(idx, 1); event.target.classList.remove('active'); } else { f.push({id: String(id), tipo, name, img}); event.target.classList.add('active'); } currentLogged.favs = f; await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ favs: f }) }); }
+        function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; let html = `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>`; document.getElementById('conteudo-principal').innerHTML = f.length ? html : `<p style="text-align:center;margin-top:40px">Lista vazia.</p>`; }
 
         async function abrirADM() { 
             document.getElementById('modal-adm').style.display = 'block'; 
-            document.getElementById('adm-url').value = API.url;
-            document.getElementById('adm-u').value = API.u;
-            document.getElementById('adm-p').value = API.p;
-            const res = await fetch(`${DB}.json`).then(r => r.json()); 
-            let html = ""; 
+            document.getElementById('adm-url').value = API.url; document.getElementById('adm-u').value = API.u; document.getElementById('adm-p').value = API.p;
+            const res = await fetch(`${DB}.json`).then(r => r.json()); let html = ""; 
             for(let id in res) { 
                 const u = res[id]; const st = u.status || 'ativo'; 
                 html += `<div class="user-card"><b>${u.user}</b> <span style="float:right;color:${st==='ativo'?'#27ae60':'#c0392b'}">${st.toUpperCase()}</span><div class="user-info"><div>S: ${u.pass}</div><div>Telas: ${u.online_count||0}/${u.screens||1}</div><div style="grid-column:span 2">Vence: ${new Date(u.expira).toLocaleString()}</div></div><div class="btn-adm-group"><button class="btn-adm" style="background:#2980b9" onclick="prepararEdicao('${id}','${u.user}','${u.pass}','${u.screens}','${u.expira}')">Editar</button><button class="btn-adm" style="background:#d35400" onclick="toggleStatus('${id}','${st}')">${st==='ativo'?'Bloquear':'Ativar'}</button><button class="btn-adm" style="background:#7f8c8d" onclick="resetTelas('${id}')">Reset</button><button class="btn-adm" style="background:#c0392b" onclick="excluirUser('${id}')">Apagar</button></div></div>`; 
@@ -375,14 +316,19 @@
         }
 
         async function salvarUsuario() { 
-            const id = document.getElementById('edit-id').value; 
-            const days = document.getElementById('new-days').value; 
-            const oldExp = document.getElementById('old-exp').value; 
+            const id = document.getElementById('edit-id').value; const days = document.getElementById('new-days').value; const oldExp = document.getElementById('old-exp').value; 
             const expFinal = (days && parseInt(days) > 0) ? Date.now() + (days * 86400000) : (id ? parseInt(oldExp) : Date.now() + (30 * 86400000)); 
             const obj = { user: document.getElementById('new-u').value, pass: document.getElementById('new-p').value, screens: parseInt(document.getElementById('new-screens').value) || 1, expira: expFinal, status: 'ativo', online_count: 0, current_token: null }; 
-            await fetch(id ? `${DB}/${id}.json` : `${DB}.json`, { method: id?'PATCH':'POST', body: JSON.stringify(obj) }); 
-            alert("Sucesso!"); abrirADM(); limparFormADM(); 
+            await fetch(id ? `${DB}/${id}.json` : `${DB}.json`, { method: id?'PATCH':'POST', body: JSON.stringify(obj) }); alert("Sucesso!"); abrirADM(); limparFormADM(); 
         }
+
+        async function salvarConfigServidor() {
+            const novaConfig = { url: document.getElementById('adm-url').value, u: document.getElementById('adm-u').value, p: document.getElementById('adm-p').value };
+            if(!novaConfig.url || !novaConfig.u || !novaConfig.p) return alert("Preencha tudo!");
+            const fullConfig = { versao_atual: VERSION, link_apk: "http://link.com", mensagem_att: "Nova versão", server: novaConfig };
+            try { await fetch(`${FIREBASE}/config.json`, { method: 'PUT', body: JSON.stringify(fullConfig) }); alert("Sincronizado!"); location.reload(); } catch(e) { alert("Erro ao salvar."); }
+        }
+
         function prepararEdicao(id, u, p, s, exp) { document.getElementById('edit-id').value = id; document.getElementById('old-exp').value = exp; document.getElementById('new-u').value = u; document.getElementById('new-p').value = p; document.getElementById('new-screens').value = s; document.getElementById('btn-save-adm').innerText = "ATUALIZAR"; }
         function limparFormADM() { document.getElementById('edit-id').value = ""; document.getElementById('new-u').value = ""; document.getElementById('new-p').value = ""; document.getElementById('new-days').value = ""; document.getElementById('btn-save-adm').innerText = "SALVAR"; }
         async function toggleStatus(id, s) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ status: s==='ativo'?'bloqueado':'ativo' }) }); abrirADM(); }
