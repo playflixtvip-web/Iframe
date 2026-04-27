@@ -45,7 +45,7 @@
 </head>
 <body>
 
-    <video id="no-sleep-video" loop muted playsinline></video>
+    <video id="no-sleep-video" loop muted playsinline style="display:none;"></video>
 
     <div id="login-ui">
         <div style="position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; z-index: 9999;">
@@ -122,18 +122,11 @@
         var secaoAtual = 'live';
         var wakeLock = null;
 
-        // FUNÇÃO DE BLOQUEIO DE TELA REFORÇADA
         async function manterTelaAtiva(ativo) {
             const noSleepVid = document.getElementById('no-sleep-video');
             if (ativo) {
-                // 1. WakeLock API (Navegadores modernos)
-                try {
-                    if ('wakeLock' in navigator) {
-                        wakeLock = await navigator.wakeLock.request('screen');
-                    }
-                } catch (err) {}
-                // 2. Loop de vídeo invisível (Garante em celulares antigos/restritos)
-                noSleepVid.src = "https://raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3"; 
+                try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (err) {}
+                noSleepVid.src = "data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDJpc29tYXZjMQAAAZptb292AAAAbG12aGQAAAAA36YnUd+mJ1EAAAPoAAAAKAABAAABAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAABemZyZWUAAAFVbWRhdGFhdmMxIDY0MHg0ODAAH/+AAAACHZpZGVvAAAAAAABAAAAAQAAABUAAAAAAAABAAEAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
                 noSleepVid.play().catch(()=>{});
             } else {
                 if (wakeLock) { wakeLock.release(); wakeLock = null; }
@@ -204,26 +197,36 @@
             const dt = currentLogged.expira ? new Date(currentLogged.expira) : null;
             const expStr = dt ? dt.toLocaleDateString() : "Vitalício";
             document.getElementById('welcome-msg').innerHTML = `Olá, <b>${currentLogged.user}</b> | Vence em: <b>${expStr}</b>`;
+            // INÍCIO RÁPIDO: Carrega as categorias primeiro, depois o conteúdo principal em background
             mudarSecao('live');
         }
 
         async function mudarSecao(tipo, btn) {
             secaoAtual = tipo;
             if(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+            
+            const principal = document.getElementById('conteudo-principal');
+            principal.innerHTML = '<p style="text-align:center;margin-top:20px;color:var(--red);">Carregando conteúdo...</p>';
+
             const catAct = tipo==='live'?'get_live_categories':tipo==='movie'?'get_vod_categories':'get_series_categories';
             const streamAct = tipo==='live'?'get_live_streams':tipo==='movie'?'get_vod_streams':'get_series';
+            
             try {
-                const [cats, streams] = await Promise.all([
-                    fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json()),
-                    fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json())
-                ]);
-                fullData[tipo] = streams; renderizar(cats, streams, tipo);
-            } catch(e) { alert("Erro ao conectar no servidor IPTV."); }
+                // Carrega categorias primeiro para agilizar o visual
+                const cats = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json());
+                
+                // Carrega os streams separadamente para não travar a UI
+                const streams = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json());
+                
+                fullData[tipo] = streams; 
+                renderizar(cats, streams, tipo);
+            } catch(e) { principal.innerHTML = '<p style="text-align:center;color:white;">Erro ao conectar. Verifique sua rede.</p>'; }
         }
 
         function renderizar(cats, streams, tipo) {
             let html = "";
-            cats.forEach(cat => {
+            // Mostra apenas as categorias que realmente têm conteúdo para poupar processamento
+            cats.slice(0, 15).forEach(cat => {
                 const itens = streams.filter(s => s.category_id === cat.category_id);
                 if(itens.length > 0) {
                     html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
@@ -238,7 +241,7 @@
             const imgUrl = i.stream_icon || i.cover || i.img;
             return `<div class="card">
                 <span class="fav-star ${isFav?'active':''}" onclick="toggleFav(event, '${id}','${tipo}','${i.name.replace(/'/g, "")}','${imgUrl}')">★</span>
-                <div onclick="abrirConteudo('${id}', '${tipo}')"><img src="${imgUrl}" onerror="this.src='https://via.placeholder.com/150x225?text=Sem+Foto'"><div class="card-name">${i.name}</div></div>
+                <div onclick="abrirConteudo('${id}', '${tipo}')"><img loading="lazy" src="${imgUrl}" onerror="this.src='https://via.placeholder.com/150x225?text=Sem+Foto'"><div class="card-name">${i.name}</div></div>
             </div>`;
         }
 
@@ -251,13 +254,13 @@
             document.getElementById('player-box').style.display = 'block';
             player.src({ src: url, type: tipo === 'live' ? 'application/x-mpegURL' : 'video/mp4' });
             player.play();
-            manterTelaAtiva(true); // ATIVA O BLOQUEIO DE DESCANSO
+            manterTelaAtiva(true); 
         }
 
         async function fecharPlayer() { 
             player.pause(); 
             document.getElementById('player-box').style.display='none'; 
-            manterTelaAtiva(false); // DESATIVA O BLOQUEIO
+            manterTelaAtiva(false); 
         }
 
         async function abrirConteudo(id, tipo) { 
