@@ -127,20 +127,21 @@
         var secaoAtual = 'live';
         var wakeLock = null;
 
-        // FUNÇÃO DE BLOQUEIO DE TELA REVISADA E REFORÇADA
+        // FUNÇÃO DE BLOQUEIO DE TELA REVISADA
         async function manterTelaAtiva(ativo) {
             const noSleepVid = document.getElementById('no-sleep-video');
             if (ativo) {
                 try {
                     if ('wakeLock' in navigator) {
-                        if (wakeLock !== null) await wakeLock.release();
                         wakeLock = await navigator.wakeLock.request('screen');
+                        wakeLock.addEventListener('release', () => { console.log('Wake Lock liberado'); });
                     }
-                } catch (err) { console.log("WakeLock falhou"); }
+                } catch (err) { console.log("WakeLock API falhou, usando fallback de vídeo"); }
                 
+                // Fallback: Vídeo invisível de 1px
                 noSleepVid.style.display = "block";
                 noSleepVid.src = "data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDJpc29tYXZjMQAAAZptb292AAAAbG12aGQAAAAA36YnUd+mJ1EAAAPoAAAAKAABAAABAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAABemZyZWUAAAFVbWRhdGFhdmMxIDY0MHg0ODAAH/+AAAACHZpZGVvAAAAAAABAAAAAQAAABUAAAAAAAABAAEAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-                noSleepVid.play().catch(e => {});
+                noSleepVid.play().catch(e => console.log("Erro no autoplay do no-sleep"));
             } else {
                 if (wakeLock !== null) {
                     wakeLock.release().then(() => { wakeLock = null; });
@@ -151,13 +152,7 @@
             }
         }
 
-        // CORREÇÃO CRÍTICA: Manter ativo ao entrar/sair de Tela Cheia
-        player.on('fullscreenchange', function() {
-            if (player.isFullscreen()) {
-                manterTelaAtiva(true);
-            }
-        });
-
+        // Reativar WakeLock se o usuário alternar abas e voltar
         document.addEventListener('visibilitychange', async () => {
             if (wakeLock !== null && document.visibilityState === 'visible') {
                 wakeLock = await navigator.wakeLock.request('screen');
@@ -274,6 +269,7 @@
             document.getElementById('player-box').style.display = 'block';
             player.src({ src: url, type: tipo === 'live' ? 'application/x-mpegURL' : 'video/mp4' });
             
+            // Ativa o bloqueio de tela assim que o player inicia
             player.one('playing', function() {
                 manterTelaAtiva(true);
             });
