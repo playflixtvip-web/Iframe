@@ -18,16 +18,16 @@
         .btn-logout { background: none; border: 1px solid #444; color: #aaa; padding: 5px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; }
         .search-container { padding: 5px 15px 10px 15px; }
         .search-input { width: 100%; padding: 10px; background: #111; border: 1px solid #333; color: #fff; border-radius: 5px; box-sizing: border-box; }
-        .secao-container { display: flex; gap: 8px; padding: 10px 12px 15px 12px; overflow-x: auto; scrollbar-width: none; background: var(--bg); -webkit-overflow-scrolling: touch; }
+        .secao-container { display: flex; gap: 8px; padding: 10px 12px 15px 12px; overflow-x: auto; scrollbar-width: none; background: var(--bg); }
         .btn-secao { padding: 8px 18px; background: var(--gray); border: none; color: #fff; border-radius: 20px; font-weight: bold; font-size: 11px; white-space: nowrap; cursor: pointer; }
         .btn-secao.active { background: var(--red); }
         .row { padding: 5px 0; }
         .row-header { display: flex; justify-content: space-between; align-items: center; padding: 0 15px; margin-bottom: 8px; }
         .row-title { font-size: 14px; font-weight: bold; }
         .btn-ver-mais { color: var(--red); font-size: 11px; font-weight: bold; background: none; border: none; cursor: pointer; }
-        .shelf { display: flex; gap: 10px; overflow-x: auto; padding: 0 15px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+        .shelf { display: flex; gap: 10px; overflow-x: auto; padding: 0 15px; scrollbar-width: none; }
         .grid-view { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; }
-        .card { min-width: 105px; border-radius: 5px; overflow: hidden; background: var(--card-bg); border: 1px solid #222; position: relative; cursor: pointer; transform: translateZ(0); will-change: transform; }
+        .card { min-width: 105px; border-radius: 5px; overflow: hidden; background: var(--card-bg); border: 1px solid #222; position: relative; cursor: pointer; }
         .card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
         .card-name { padding: 5px; font-size: 9px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .fav-star { position: absolute; top: 5px; right: 5px; font-size: 18px; text-shadow: 0 0 5px #000; cursor: pointer; z-index: 10; color: #ccc; transition: color 0.2s; }
@@ -117,47 +117,26 @@
         const DB = `${FIREBASE}/usuarios`;
 
         var player = videojs('vid', {
-            html5: { vhs: { overrideNative: true, fastQualityChange: true } },
-            liveui: true,
-            preload: 'auto'
+            html5: { vhs: { overrideNative: true }, nativeAudioTracks: false, nativeVideoTracks: false }
         });
-
+        
         var fullData = {};
         var currentLogged = {};
         var secaoAtual = 'live';
         var wakeLock = null;
 
-        // FUNÇÃO DE BLOQUEIO DE TELA REVISADA
         async function manterTelaAtiva(ativo) {
             const noSleepVid = document.getElementById('no-sleep-video');
             if (ativo) {
-                try {
-                    if ('wakeLock' in navigator) {
-                        wakeLock = await navigator.wakeLock.request('screen');
-                        wakeLock.addEventListener('release', () => { console.log('Wake Lock liberado'); });
-                    }
-                } catch (err) { console.log("WakeLock API falhou, usando fallback de vídeo"); }
-                
-                // Fallback: Vídeo invisível de 1px
-                noSleepVid.style.display = "block";
+                try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (err) {}
                 noSleepVid.src = "data:video/mp4;base64,AAAAHGZ0eXBtcDQyAAAAAG1wNDJpc29tYXZjMQAAAZptb292AAAAbG12aGQAAAAA36YnUd+mJ1EAAAPoAAAAKAABAAABAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAABemZyZWUAAAFVbWRhdGFhdmMxIDY0MHg0ODAAH/+AAAACHZpZGVvAAAAAAABAAAAAQAAABUAAAAAAAABAAEAAAABAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-                noSleepVid.play().catch(e => console.log("Erro no autoplay do no-sleep"));
+                noSleepVid.play().catch(()=>{});
             } else {
-                if (wakeLock !== null) {
-                    wakeLock.release().then(() => { wakeLock = null; });
-                }
+                if (wakeLock) { wakeLock.release(); wakeLock = null; }
                 noSleepVid.pause();
                 noSleepVid.src = "";
-                noSleepVid.style.display = "none";
             }
         }
-
-        // Reativar WakeLock se o usuário alternar abas e voltar
-        document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible') {
-                wakeLock = await navigator.wakeLock.request('screen');
-            }
-        });
 
         window.onload = async () => {
             await carregarConfiguracoes();
@@ -227,24 +206,29 @@
         async function mudarSecao(tipo, btn) {
             secaoAtual = tipo;
             if(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+            
             const principal = document.getElementById('conteudo-principal');
             principal.innerHTML = '<p style="text-align:center;margin-top:20px;color:var(--red);">Carregando...</p>';
+
             const catAct = tipo==='live'?'get_live_categories':tipo==='movie'?'get_vod_categories':'get_series_categories';
             const streamAct = tipo==='live'?'get_live_streams':tipo==='movie'?'get_vod_streams':'get_series';
+            
             try {
-                const cats = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json());
-                const streams = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json());
+                const [cats, streams] = await Promise.all([
+                    fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json()),
+                    fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json())
+                ]);
                 fullData[tipo] = streams; 
                 renderizar(cats, streams, tipo);
-            } catch(e) { principal.innerHTML = '<p style="text-align:center;color:white;">Erro de conexão.</p>'; }
+            } catch(e) { principal.innerHTML = '<p style="text-align:center;color:white;">Erro ao carregar lista.</p>'; }
         }
 
         function renderizar(cats, streams, tipo) {
             let html = "";
-            cats.slice(0, 12).forEach(cat => {
+            cats.slice(0, 20).forEach(cat => {
                 const itens = streams.filter(s => s.category_id === cat.category_id);
                 if(itens.length > 0) {
-                    html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 6).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
+                    html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
                 }
             });
             document.getElementById('conteudo-principal').innerHTML = html;
@@ -262,19 +246,28 @@
 
         async function play(id, ext, tipo) {
             let url = "";
-            if(tipo === 'live') url = `${API.url}/live/${API.u}/${API.p}/${id}.m3u8`;
-            else if (tipo === 'movie') url = `${API.url}/movie/${API.u}/${API.p}/${id}.${ext || 'mp4'}`;
-            else if (tipo === 'series') url = `${API.url}/series/${API.u}/${API.p}/${id}.${ext || 'mp4'}`;
+            let type = "";
+
+            if(tipo === 'live') {
+                url = `${API.url}/live/${API.u}/${API.p}/${id}.m3u8`;
+                type = 'application/x-mpegURL';
+            } else {
+                const formato = ext || 'mp4';
+                url = `${API.url}/${tipo}/${API.u}/${API.p}/${id}.${formato}`;
+                type = (formato === 'm3u8') ? 'application/x-mpegURL' : 'video/mp4';
+            }
 
             document.getElementById('player-box').style.display = 'block';
-            player.src({ src: url, type: tipo === 'live' ? 'application/x-mpegURL' : 'video/mp4' });
             
-            // Ativa o bloqueio de tela assim que o player inicia
-            player.one('playing', function() {
-                manterTelaAtiva(true);
+            player.src({ src: url, type: type });
+            player.ready(function() {
+                this.play().catch(function() {
+                    // Fallback se o navegador rejeitar o tipo de arquivo
+                    player.src({ src: url, type: 'application/x-mpegURL' });
+                    player.play().catch(e => console.log("Erro fatal de play"));
+                });
             });
-            
-            player.play();
+            manterTelaAtiva(true); 
         }
 
         async function fecharPlayer() { 
@@ -289,13 +282,14 @@
             const param = tipo === 'series' ? 'series_id' : 'vod_id';
             const res = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${action}&${param}=${id}`).then(r => r.json()); 
             const info = res.info || res.movie_data; 
-            let html = `<img src="${info.cover || info.movie_image}" style="width:180px; border-radius:8px;"><h2>${info.name}</h2><p style="font-size:13px; color:#ccc;">${info.plot || 'Sem sinopse.'}</p>`; 
+            const container = (res.movie_data && res.movie_data.container_extension) ? res.movie_data.container_extension : 'mp4';
+
+            let html = `<img src="${info.cover || info.movie_image}" style="width:180px; border-radius:8px;"><h2>${info.name}</h2><p style="font-size:13px; color:#ccc; padding:0 20px;">${info.plot || 'Sem sinopse.'}</p>`; 
             if(tipo === 'series') { 
                 window.tempEps = res.episodes; 
-                html += `<select class="input-adm" onchange="carregarEps(this.value)"><option value="">Selecione a Temporada</option>${Object.keys(res.episodes).map(s => `<option value="${s}">Temporada ${s}</option>`).join('')}</select><div id="eps-box" style="max-height:300px; overflow-y:auto;"></div>`; 
+                html += `<select class="input-adm" onchange="carregarEps(this.value)"><option value="">Selecione a Temporada</option>${Object.keys(res.episodes).map(s => `<option value="${s}">Temporada ${s}</option>`).join('')}</select><div id="eps-box" style="max-height:300px; overflow-y:auto; margin-top:10px;"></div>`; 
             } else { 
-                const ext = info.container_extension || 'mp4';
-                html += `<button onclick="play('${id}','${ext}','movie')" style="width:90%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px;">ASSISTIR AGORA</button>`; 
+                html += `<button onclick="play('${id}','${container}','movie')" style="width:90%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px; margin-top:15px;">ASSISTIR AGORA</button>`; 
             } 
             document.getElementById('detalhes-body').innerHTML = html; 
             document.getElementById('modal-detalhes').style.display = 'block'; 
@@ -306,9 +300,9 @@
             document.getElementById('eps-box').innerHTML = window.tempEps[s].map(e => {
                 const epId = e.id || e.stream_id;
                 const ext = e.container_extension || 'mp4';
-                return `<div style="padding:12px; border-bottom:1px solid #222; display:flex; justify-content:space-between; align-items:center;">
-                    <span>E${e.episode_num} - ${e.title}</span>
-                    <button onclick="play('${epId}','${ext}','series')" style="background:var(--red); border:none; color:white; padding:6px 12px; border-radius:4px;">PLAY</button>
+                return `<div style="padding:12px; border-bottom:1px solid #222; display:flex; justify-content:space-between; align-items:center; text-align:left;">
+                    <span style="font-size:12px;">E${e.episode_num} - ${e.title}</span>
+                    <button onclick="play('${epId}','${ext}','series')" style="background:var(--red); border:none; color:white; padding:6px 12px; border-radius:4px; font-size:10px; font-weight:bold;">PLAY</button>
                 </div>`;
             }).join(''); 
         }
@@ -321,11 +315,11 @@
             localStorage.clear(); location.reload();
         }
 
-        function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
+        function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; window.scrollTo(0,0); }
         function executarBusca(q) { if(!q) return mudarSecao(secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 30); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
         function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
         async function toggleFav(event, id, tipo, name, img) { event.stopPropagation(); if(!currentLogged.id) return; let f = currentLogged.favs || []; const idx = f.findIndex(x => x.id === String(id)); if(idx > -1) { f.splice(idx, 1); event.target.classList.remove('active'); } else { f.push({id: String(id), tipo, name, img}); event.target.classList.add('active'); } currentLogged.favs = f; await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ favs: f }) }); }
-        function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; let html = `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>`; document.getElementById('conteudo-principal').innerHTML = f.length ? html : `<p style="text-align:center;">Lista vazia.</p>`; }
+        function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; let html = `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>`; document.getElementById('conteudo-principal').innerHTML = f.length ? html : `<p style="text-align:center;margin-top:40px">Lista vazia.</p>`; }
 
         async function abrirADM() { 
             document.getElementById('modal-adm').style.display = 'block'; 
@@ -347,6 +341,7 @@
 
         async function salvarConfigServidor() {
             const novaConfig = { url: document.getElementById('adm-url').value, u: document.getElementById('adm-u').value, p: document.getElementById('adm-p').value };
+            if(!novaConfig.url || !novaConfig.u || !novaConfig.p) return alert("Preencha tudo!");
             const fullConfig = { versao_atual: VERSION, link_apk: "http://link.com", mensagem_att: "Nova versão", server: novaConfig };
             try { await fetch(`${FIREBASE}/config.json`, { method: 'PUT', body: JSON.stringify(fullConfig) }); alert("Sincronizado!"); location.reload(); } catch(e) { alert("Erro ao salvar."); }
         }
