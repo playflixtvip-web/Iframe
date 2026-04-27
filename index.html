@@ -18,16 +18,16 @@
         .btn-logout { background: none; border: 1px solid #444; color: #aaa; padding: 5px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; }
         .search-container { padding: 5px 15px 10px 15px; }
         .search-input { width: 100%; padding: 10px; background: #111; border: 1px solid #333; color: #fff; border-radius: 5px; box-sizing: border-box; }
-        .secao-container { display: flex; gap: 8px; padding: 10px 12px 15px 12px; overflow-x: auto; scrollbar-width: none; background: var(--bg); }
+        .secao-container { display: flex; gap: 8px; padding: 10px 12px 15px 12px; overflow-x: auto; scrollbar-width: none; background: var(--bg); -webkit-overflow-scrolling: touch; }
         .btn-secao { padding: 8px 18px; background: var(--gray); border: none; color: #fff; border-radius: 20px; font-weight: bold; font-size: 11px; white-space: nowrap; cursor: pointer; }
         .btn-secao.active { background: var(--red); }
         .row { padding: 5px 0; }
         .row-header { display: flex; justify-content: space-between; align-items: center; padding: 0 15px; margin-bottom: 8px; }
         .row-title { font-size: 14px; font-weight: bold; }
         .btn-ver-mais { color: var(--red); font-size: 11px; font-weight: bold; background: none; border: none; cursor: pointer; }
-        .shelf { display: flex; gap: 10px; overflow-x: auto; padding: 0 15px; scrollbar-width: none; }
+        .shelf { display: flex; gap: 10px; overflow-x: auto; padding: 0 15px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
         .grid-view { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 15px; }
-        .card { min-width: 105px; border-radius: 5px; overflow: hidden; background: var(--card-bg); border: 1px solid #222; position: relative; cursor: pointer; }
+        .card { min-width: 105px; border-radius: 5px; overflow: hidden; background: var(--card-bg); border: 1px solid #222; position: relative; cursor: pointer; transform: translateZ(0); }
         .card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
         .card-name { padding: 5px; font-size: 9px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .fav-star { position: absolute; top: 5px; right: 5px; font-size: 18px; text-shadow: 0 0 5px #000; cursor: pointer; z-index: 10; color: #ccc; transition: color 0.2s; }
@@ -117,9 +117,10 @@
         const DB = `${FIREBASE}/usuarios`;
 
         var player = videojs('vid', {
-            html5: { vhs: { overrideNative: true }, nativeAudioTracks: false, nativeVideoTracks: false }
+            html5: { vhs: { overrideNative: true } },
+            preload: 'auto'
         });
-        
+
         var fullData = {};
         var currentLogged = {};
         var secaoAtual = 'live';
@@ -206,26 +207,21 @@
         async function mudarSecao(tipo, btn) {
             secaoAtual = tipo;
             if(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-            
             const principal = document.getElementById('conteudo-principal');
             principal.innerHTML = '<p style="text-align:center;margin-top:20px;color:var(--red);">Carregando...</p>';
-
             const catAct = tipo==='live'?'get_live_categories':tipo==='movie'?'get_vod_categories':'get_series_categories';
             const streamAct = tipo==='live'?'get_live_streams':tipo==='movie'?'get_vod_streams':'get_series';
-            
             try {
-                const [cats, streams] = await Promise.all([
-                    fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json()),
-                    fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json())
-                ]);
+                const cats = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json());
+                const streams = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json());
                 fullData[tipo] = streams; 
                 renderizar(cats, streams, tipo);
-            } catch(e) { principal.innerHTML = '<p style="text-align:center;color:white;">Erro ao carregar lista.</p>'; }
+            } catch(e) { principal.innerHTML = '<p style="text-align:center;color:white;">Erro de conexão.</p>'; }
         }
 
         function renderizar(cats, streams, tipo) {
             let html = "";
-            cats.slice(0, 20).forEach(cat => {
+            cats.slice(0, 15).forEach(cat => {
                 const itens = streams.filter(s => s.category_id === cat.category_id);
                 if(itens.length > 0) {
                     html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
@@ -246,28 +242,33 @@
 
         async function play(id, ext, tipo) {
             let url = "";
-            let type = "";
+            let mimeType = 'video/mp4';
 
             if(tipo === 'live') {
                 url = `${API.url}/live/${API.u}/${API.p}/${id}.m3u8`;
-                type = 'application/x-mpegURL';
+                mimeType = 'application/x-mpegURL';
             } else {
-                const formato = ext || 'mp4';
+                const formato = (ext && ext !== "") ? ext : 'mp4';
                 url = `${API.url}/${tipo}/${API.u}/${API.p}/${id}.${formato}`;
-                type = (formato === 'm3u8') ? 'application/x-mpegURL' : 'video/mp4';
+                if(formato === 'm3u8') mimeType = 'application/x-mpegURL';
+                else if(formato === 'mkv') mimeType = 'video/x-matroska';
             }
 
             document.getElementById('player-box').style.display = 'block';
             
-            player.src({ src: url, type: type });
+            // Força a limpeza do player antes de carregar o novo vídeo
+            player.src({ src: url, type: mimeType });
+            
             player.ready(function() {
-                this.play().catch(function() {
-                    // Fallback se o navegador rejeitar o tipo de arquivo
-                    player.src({ src: url, type: 'application/x-mpegURL' });
-                    player.play().catch(e => console.log("Erro fatal de play"));
+                this.play().catch(function(error) {
+                    console.log("Erro no play primário, tentando fallback...");
+                    // Fallback para MP4 puro caso a detecção do servidor esteja errada
+                    player.src({ src: url.split('.')[0] + '.mp4', type: 'video/mp4' });
+                    player.play().catch(e => console.log("Erro fatal de carregamento"));
                 });
             });
-            manterTelaAtiva(true); 
+
+            manterTelaAtiva(true);
         }
 
         async function fecharPlayer() { 
@@ -341,7 +342,6 @@
 
         async function salvarConfigServidor() {
             const novaConfig = { url: document.getElementById('adm-url').value, u: document.getElementById('adm-u').value, p: document.getElementById('adm-p').value };
-            if(!novaConfig.url || !novaConfig.u || !novaConfig.p) return alert("Preencha tudo!");
             const fullConfig = { versao_atual: VERSION, link_apk: "http://link.com", mensagem_att: "Nova versão", server: novaConfig };
             try { await fetch(`${FIREBASE}/config.json`, { method: 'PUT', body: JSON.stringify(fullConfig) }); alert("Sincronizado!"); location.reload(); } catch(e) { alert("Erro ao salvar."); }
         }
