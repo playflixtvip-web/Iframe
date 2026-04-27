@@ -120,6 +120,7 @@
         var fullData = {};
         var currentLogged = {};
         var secaoAtual = 'live';
+        var wakeLock = null; // Controle de tela ligada
 
         window.onload = async () => {
             await carregarConfiguracoes();
@@ -135,16 +136,13 @@
             }
         };
 
-        // FUNÇÃO INTELIGENTE: Carrega do Firebase ou usa o padrão se estiver vazio
         async function carregarConfiguracoes() {
             try {
                 const res = await fetch(`${FIREBASE}/config.json`).then(r => r.json());
                 if(res) {
-                    // Só bloqueia se houver uma versão explícita no Firebase diferente desta
                     if(res.versao_atual && res.versao_atual !== VERSION) {
                         return bloquearApp(res.link_apk, res.mensagem_att);
                     }
-                    // Se o servidor existir no Firebase, atualiza a variável global
                     if(res.server && res.server.url) {
                         API = res.server;
                     }
@@ -166,17 +164,13 @@
                 u: document.getElementById('adm-u').value,
                 p: document.getElementById('adm-p').value
             };
-            
             if(!novaConfig.url || !novaConfig.u || !novaConfig.p) return alert("Preencha todos os campos!");
-            
-            // Salva o Servidor E a Versão no Firebase de uma vez só para inicializar tudo
             const fullConfig = {
                 versao_atual: VERSION,
                 link_apk: "http://link.com",
                 mensagem_att: "Nova versão disponível",
                 server: novaConfig
             };
-
             try {
                 await fetch(`${FIREBASE}/config.json`, { method: 'PUT', body: JSON.stringify(fullConfig) });
                 alert("Sincronizado com sucesso! Reiniciando app...");
@@ -188,18 +182,15 @@
             const u = document.getElementById('user').value;
             const p = document.getElementById('pass').value;
             if(!u || !p) return;
-            
             if(u === "Rhuan" && p === "270412") {
                 currentLogged = { user: "Rhuan", adm: true, screens: 99, favs: [] }; entrar(); return;
             }
-
             const res = await fetch(`${DB}.json`).then(r => r.json());
             for(let id in res) {
                 const user = res[id];
                 if(user.user === u && user.pass === p) {
                     if(user.status === 'bloqueado') return alert("Sua conta está SUSPENSA.");
                     if(user.expira && user.expira < Date.now()) return alert("Sua conta VENCEU.");
-                    
                     let myToken = localStorage.getItem('device_token');
                     if(!user.adm) {
                         if(user.current_token !== myToken) {
@@ -240,7 +231,6 @@
             }
             const catAct = tipo==='live'?'get_live_categories':tipo==='movie'?'get_vod_categories':'get_series_categories';
             const streamAct = tipo==='live'?'get_live_streams':tipo==='movie'?'get_vod_streams':'get_series';
-            
             try {
                 const [cats, streams] = await Promise.all([
                     fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json()),
@@ -291,6 +281,15 @@
             document.getElementById('conteudo-principal').innerHTML = f.length ? html : `<p style="text-align:center;margin-top:40px">Lista vazia.</p>`;
         }
 
+        // NOVO: Função para manter a tela ligada
+        async function ativarWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) { console.log("WakeLock erro: " + err); }
+        }
+
         async function play(id, ext, tipo) {
             let url = "";
             if(tipo === 'live') url = `${API.url}/live/${API.u}/${API.p}/${id}.m3u8`;
@@ -300,9 +299,16 @@
             document.getElementById('player-box').style.display = 'block';
             player.src({ src: url, type: tipo === 'live' ? 'application/x-mpegURL' : 'video/mp4' });
             player.play();
+            ativarWakeLock(); // Ativa o bloqueio de tela ao dar play
         }
 
-        async function fecharPlayer() { player.pause(); document.getElementById('player-box').style.display='none'; }
+        async function fecharPlayer() { 
+            player.pause(); 
+            document.getElementById('player-box').style.display='none'; 
+            if (wakeLock !== null) {
+                wakeLock.release().then(() => { wakeLock = null; }); // Libera a tela quando o player fecha
+            }
+        }
 
         async function logout() {
             if(currentLogged.id && !currentLogged.adm) {
@@ -353,7 +359,6 @@
             document.getElementById('adm-url').value = API.url;
             document.getElementById('adm-u').value = API.u;
             document.getElementById('adm-p').value = API.p;
-
             const res = await fetch(`${DB}.json`).then(r => r.json()); 
             let html = ""; 
             for(let id in res) { 
