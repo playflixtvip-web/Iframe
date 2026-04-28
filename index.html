@@ -121,9 +121,12 @@
         
         var player = videojs('vid');
         var fullData = {}; var currentLogged = {}; var secaoAtual = 'live'; var saveInterval = null;
-        var currentPlayerContext = { id: null, startTime: 0 };
         var relogioInterval = null;
         var wakeLock = null; 
+        var currentPlayingId = null;
+        var currentPlayingType = null;
+        var currentSeriesParent = null;
+        var currentSeason = null;
 
         window.onload = async () => {
             await carregarConfigServidor();
@@ -136,34 +139,13 @@
             }
         };
 
-        // --- SISTEMA WAKE LOCK (MANTÉM TELA ACESA) ---
         async function solicitarWakeLock() {
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    console.log("Bloqueio de tela ativo!");
-                }
-            } catch (err) {
-                console.log("WakeLock não suportado ou negado: " + err.message);
-            }
+            try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
         }
 
         function liberarWakeLock() {
-            if (wakeLock !== null) {
-                wakeLock.release().then(() => {
-                    wakeLock = null;
-                    console.log("Bloqueio de tela liberado.");
-                });
-            }
+            if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); }
         }
-
-        // Reativa o bloqueio se o usuário alternar abas e voltar para o app assistindo
-        document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible') {
-                await solicitarWakeLock();
-            }
-        });
-        // ---------------------------------------------
 
         async function carregarConfigServidor() {
             try {
@@ -192,14 +174,6 @@
                     if(user.user === u && user.pass === p) {
                         if(user.status === 'bloqueado') return alert("Sua conta está BLOQUEADA!");
                         if(user.expira && user.expira < Date.now()) return alert("Seu acesso VENCEU!");
-
-                        let myToken = localStorage.getItem('device_token');
-                        if(user.current_token !== myToken) {
-                            if((user.online_count || 0) >= (user.screens || 1)) return alert("Limite de telas atingido!");
-                            if(!myToken) { myToken = 'tk-' + Math.random().toString(36).substr(2, 9); localStorage.setItem('device_token', myToken); }
-                            await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: (user.online_count || 0) + 1, current_token: myToken }) });
-                        }
-
                         currentLogged = user; currentLogged.id = id;
                         localStorage.setItem('clone_creds', JSON.stringify({u, p}));
                         found = true; entrar(); break;
@@ -213,28 +187,19 @@
             document.getElementById('login-ui').style.display='none'; 
             document.getElementById('app-ui').style.display='block'; 
             if(currentLogged.adm) document.getElementById('adm-btn').style.display='block';
-            
             const venc = currentLogged.expira ? new Date(currentLogged.expira).toLocaleDateString() : "Vitalício";
-            
             if(relogioInterval) clearInterval(relogioInterval);
             atualizarRelogio(venc);
             relogioInterval = setInterval(() => atualizarRelogio(venc), 1000);
-
             mudarSecao('live'); 
         }
 
         function atualizarRelogio(vencimento) {
             const agora = new Date();
-            const diasSemana = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
-            const diaSemana = diasSemana[agora.getDay()];
-            const dataFormatada = agora.toLocaleDateString('pt-BR');
-            const horaFormatada = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
+            const diasSemana = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
             document.getElementById('welcome-msg').innerHTML = `
                 Olá, <b>${currentLogged.user}</b> | Vence em: <span>${vencimento}</span><br>
-                <small style="color:#888; font-size:10px; margin-top:4px; display:block;">
-                    ${diaSemana}, ${dataFormatada} - ${horaFormatada}
-                </small>
+                <small style="color:#888; font-size:10px;">${diasSemana[agora.getDay()]}, ${agora.toLocaleDateString()} - ${agora.toLocaleTimeString()}</small>
             `;
         }
 
@@ -243,10 +208,8 @@
             if(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
             const principal = document.getElementById('conteudo-principal');
             principal.innerHTML = '<p style="text-align:center;padding:30px;color:var(--red);">Carregando biblioteca...</p>';
-            
             const catAct = tipo==='live'?'get_live_categories':tipo==='movie'?'get_vod_categories':'get_series_categories';
             const streamAct = tipo==='live'?'get_live_streams':tipo==='movie'?'get_vod_streams':'get_series';
-            
             try {
                 const cats = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json());
                 const streams = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json());
@@ -264,10 +227,7 @@
             }
             if(continueWatching.length > 0) {
                 html += `<div class="row">
-                    <div class="row-header">
-                        <span class="row-title" style="color:var(--yellow)">CONTINUAR ASSISTINDO</span>
-                        <button class="btn-ver-mais" onclick="verMaisHistorico('${tipo}')">VER MAIS</button>
-                    </div>
+                    <div class="row-header"><span class="row-title" style="color:var(--yellow)">CONTINUAR ASSISTINDO</span></div>
                     <div class="shelf">${continueWatching.map(i => cardHtml(i, tipo)).join('')}</div>
                 </div>`;
             }
@@ -350,39 +310,67 @@
         function fecharModalEscolha() { document.getElementById('modal-escolha-ep').style.display = 'none'; }
 
         async function play(id, ext, tipo, startTime = 0, seriesParentId = null, seasonNum = null) {
+            currentPlayingId = id; currentPlayingType = tipo; currentSeriesParent = seriesParentId; currentSeason = seasonNum;
             let url = (tipo === 'live') ? `${API.url}/live/${API.u}/${API.p}/${id}.m3u8` : (tipo === 'movie') ? `${API.url}/movie/${API.u}/${API.p}/${id}.${ext||'mp4'}` : `${API.url}/series/${API.u}/${API.p}/${id}.${ext||'mp4'}`;
-            currentPlayerContext = { id, startTime };
             
-            // ATIVA O BLOQUEIO DE TELA AO DAR PLAY
             await solicitarWakeLock();
-
             document.getElementById('player-box').style.display = 'block';
             player.src({ src: url, type: tipo==='live'?'application/x-mpegURL':'video/mp4' });
+            
             player.ready(() => { 
                 if(startTime > 0) player.currentTime(startTime); 
                 player.play(); 
                 if(tipo !== 'live') {
                     if(saveInterval) clearInterval(saveInterval);
-                    saveInterval = setInterval(async () => {
-                        const time = Math.floor(player.currentTime());
-                        const duration = player.duration();
-                        if(!duration || time < 10) return;
-                        if(!currentLogged.history) currentLogged.history = {};
-                        if(Math.floor((time/duration)*100) >= 95) delete currentLogged.history[id];
-                        else currentLogged.history[id] = { time, tipo, seriesParentId, season: seasonNum };
-                        await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
-                    }, 8000);
+                    saveInterval = setInterval(() => salvarProgressoFirebase(), 8000);
                 }
             });
         }
 
+        async function salvarProgressoFirebase() {
+            if(!currentPlayingId || currentPlayingType === 'live') return;
+            const time = Math.floor(player.currentTime());
+            const duration = player.duration();
+            if(!duration || isNaN(duration)) return;
+            
+            if(!currentLogged.history) currentLogged.history = {};
+            const percent = (time / duration) * 100;
+
+            // 1. DESMARCAR SE ESTIVER NOS PRIMEIROS 10 SEGUNDOS (Limpando o "Continuar")
+            if (time < 10) {
+                if (currentLogged.history[currentPlayingId]) {
+                    delete currentLogged.history[currentPlayingId];
+                    await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
+                }
+                return;
+            }
+
+            // 2. DESMARCAR SE PASSAR DE 90% (Considerado Assistido)
+            if (percent >= 90) {
+                if (currentLogged.history[currentPlayingId]) {
+                    delete currentLogged.history[currentPlayingId];
+                    await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
+                }
+            } else {
+                // 3. SALVAMENTO INSTANTÂNEO DO TEMPO ATUAL
+                currentLogged.history[currentPlayingId] = { 
+                    time, 
+                    tipo: currentPlayingType, 
+                    seriesParentId: currentSeriesParent, 
+                    season: currentSeason 
+                };
+                await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
+            }
+        }
+
         async function fecharPlayer() { 
+            // Salva o ponto EXATO do clique no X antes de fechar tudo
+            if(currentPlayingType !== 'live') {
+                await salvarProgressoFirebase();
+            }
             if(saveInterval) clearInterval(saveInterval);
             player.pause(); 
-            
-            // LIBERA A TELA PARA APAGAR NORMALMENTE QUANDO SAIR DO PLAYER
             liberarWakeLock();
-
             document.getElementById('player-box').style.display='none'; 
             mudarSecao(secaoAtual);
         }
@@ -393,20 +381,15 @@
             let html = "";
             for(let id in res) {
                 const u = res[id];
-                const statusColor = u.status === 'bloqueado' ? '#e74c3c' : '#2ecc71';
                 html += `<div class="user-card">
-                    <b>${u.user} (${u.pass})</b> <span style="float:right; color:${statusColor}">${u.status || 'Ativo'}</span><br>
-                    Telas: ${u.online_count || 0}/${u.screens || 1} | Vence: ${u.expira ? new Date(u.expira).toLocaleDateString() : 'N/A'}<br><br>
+                    <b>${u.user} (${u.pass})</b> <span style="float:right; color:${u.status==='bloqueado'?'red':'green'}">${u.status||'ativo'}</span><br>
+                    Telas: ${u.online_count||0}/${u.screens||1} | Vence: ${u.expira?new Date(u.expira).toLocaleDateString():'N/A'}<br><br>
                     <button class="btn-adm" style="background:#2980b9" onclick="prepararEdicao('${id}','${u.user}','${u.pass}','${u.screens}','${u.expira}')">Editar</button>
                     <button class="btn-adm" style="background:#d35400" onclick="toggleStatus('${id}','${u.status}')">Bloq/Lib</button>
-                    <button class="btn-adm" style="background:#7f8c8d" onclick="resetTelas('${id}')">Reset</button>
                     <button class="btn-adm" style="background:#c0392b" onclick="excluirUser('${id}')">Excluir</button>
                 </div>`;
             }
             document.getElementById('lista-usuarios-adm').innerHTML = html;
-            document.getElementById('adm-url').value = API.url;
-            document.getElementById('adm-u').value = API.u;
-            document.getElementById('adm-p').value = API.p;
         }
 
         async function salvarUsuario() {
@@ -414,19 +397,13 @@
             const days = parseInt(document.getElementById('new-days').value) || 0;
             const expFinal = days > 0 ? Date.now() + (days * 86400000) : (id ? parseInt(document.getElementById('old-exp').value) : Date.now() + (30 * 86400000));
             const user = { 
-                user: document.getElementById('new-u').value, 
-                pass: document.getElementById('new-p').value, 
-                screens: parseInt(document.getElementById('new-screens').value) || 1,
-                expira: expFinal,
-                status: 'ativo',
-                online_count: 0,
-                history: {}, favs: []
+                user: document.getElementById('new-u').value, pass: document.getElementById('new-p').value, 
+                screens: parseInt(document.getElementById('new-screens').value) || 1, expira: expFinal, status: 'ativo'
             };
             await fetch(id ? `${DB}/${id}.json` : `${DB}.json`, { method: id?'PATCH':'POST', body: JSON.stringify(user) });
-            alert("Sucesso!"); limparFormADM(); abrirADM();
+            limparFormADM(); abrirADM();
         }
 
-        async function resetTelas(id) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: 0, current_token: null }) }); abrirADM(); }
         async function toggleStatus(id, s) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ status: s==='bloqueado'?'ativo':'bloqueado' }) }); abrirADM(); }
         async function excluirUser(id) { if(confirm("Excluir?")) { await fetch(`${DB}/${id}.json`, { method: 'DELETE' }); abrirADM(); } }
         function prepararEdicao(id, u, p, s, exp) { 
@@ -436,19 +413,7 @@
         }
         function limparFormADM() { document.getElementById('edit-id').value = ""; document.getElementById('new-u').value = ""; document.getElementById('new-p').value = ""; document.getElementById('btn-save-adm').innerText = "SALVAR CLIENTE"; }
 
-        async function salvarConfigServidor() {
-            const server = { url: document.getElementById('adm-url').value, u: document.getElementById('adm-u').value, p: document.getElementById('adm-p').value };
-            await fetch(`${FIREBASE}/config.json`, { method: 'PUT', body: JSON.stringify({server}) });
-            alert("Servidor atualizado!"); location.reload();
-        }
-
-        async function logout() {
-            if(currentLogged.id && currentLogged.id !== 'admin') {
-                await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: 0, current_token: null }) });
-            }
-            localStorage.clear(); location.reload();
-        }
-
+        async function logout() { localStorage.clear(); location.reload(); }
         function executarBusca(q) { if(!q) return mudarSecao(secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 40); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
         async function toggleFav(event, id, tipo, name, img) { event.stopPropagation(); let f = currentLogged.favs || []; const idx = f.findIndex(x => x.id === String(id)); if(idx > -1) { f.splice(idx, 1); event.target.classList.remove('active'); } else { f.push({id: String(id), tipo, name, img}); event.target.classList.add('active'); } currentLogged.favs = f; await fetch(`${DB}/${currentLogged.id}/favs.json`, { method: 'PUT', body: JSON.stringify(f) }); }
         function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, series_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>`; }
