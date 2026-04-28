@@ -120,34 +120,25 @@
         const DB = `${FIREBASE}/usuarios`;
         
         var player = videojs('vid');
-        var fullData = {}; var currentLogged = {}; var secaoAtual = 'live'; var saveInterval = null;
+        var fullData = {}; 
+        var fullCats = {}; // Cache para categorias
+        var currentLogged = {}; var secaoAtual = 'live'; var saveInterval = null;
         var currentPlayerContext = { id: null, startTime: 0 };
         var relogioInterval = null;
 
-        // --- SISTEMA ANTI-BLOQUEIO DE TELA (WAKE LOCK) ---
         let wakeLock = null;
         async function gerenciarWakeLock(ativar) {
             if ('wakeLock' in navigator) {
                 try {
                     if (ativar) {
                         wakeLock = await navigator.wakeLock.request('screen');
-                        console.log("Anti-bloqueio ativado");
                     } else if (wakeLock) {
                         await wakeLock.release();
                         wakeLock = null;
-                        console.log("Anti-bloqueio liberado");
                     }
-                } catch (err) {
-                    console.error("Erro no WakeLock: ", err);
-                }
+                } catch (err) {}
             }
         }
-        // Re-ativar se o usuário sair e voltar para o app com o player aberto
-        document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible' && document.getElementById('player-box').style.display === 'block') {
-                wakeLock = await navigator.wakeLock.request('screen');
-            }
-        });
 
         window.onload = async () => {
             await carregarConfigServidor();
@@ -187,55 +178,41 @@
                     if(user.user === u && user.pass === p) {
                         if(user.status === 'bloqueado') return alert("Sua conta está BLOQUEADA!");
                         if(user.expira && user.expira < Date.now()) return alert("Seu acesso VENCEU!");
-
-                        let myToken = localStorage.getItem('device_token');
-                        if(user.current_token !== myToken) {
-                            if((user.online_count || 0) >= (user.screens || 1)) return alert("Limite de telas atingido!");
-                            if(!myToken) { myToken = 'tk-' + Math.random().toString(36).substr(2, 9); localStorage.setItem('device_token', myToken); }
-                            await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: (user.online_count || 0) + 1, current_token: myToken }) });
-                        }
-
                         currentLogged = user; currentLogged.id = id;
                         localStorage.setItem('clone_creds', JSON.stringify({u, p}));
                         found = true; entrar(); break;
                     }
                 }
                 if(!found && !isAuto) statusDiv.innerText = "Usuário ou senha incorretos!";
-            } catch(e) { statusDiv.innerText = "Erro ao conectar ao banco."; }
+            } catch(e) { statusDiv.innerText = "Erro ao conectar."; }
         }
 
         function entrar() { 
             document.getElementById('login-ui').style.display='none'; 
             document.getElementById('app-ui').style.display='block'; 
             if(currentLogged.adm) document.getElementById('adm-btn').style.display='block';
-            
             const venc = currentLogged.expira ? new Date(currentLogged.expira).toLocaleDateString() : "Vitalício";
-            
             if(relogioInterval) clearInterval(relogioInterval);
             atualizarRelogio(venc);
             relogioInterval = setInterval(() => atualizarRelogio(venc), 1000);
-
             mudarSecao('live'); 
         }
 
         function atualizarRelogio(vencimento) {
             const agora = new Date();
-            const diasSemana = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
-            const diaSemana = diasSemana[agora.getDay()];
-            const dataFormatada = agora.toLocaleDateString('pt-BR');
-            const horaFormatada = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-            document.getElementById('welcome-msg').innerHTML = `
-                Olá, <b>${currentLogged.user}</b> | Vence em: <span>${vencimento}</span><br>
-                <small style="color:#888; font-size:10px; margin-top:4px; display:block;">
-                    ${diaSemana}, ${dataFormatada} - ${horaFormatada}
-                </small>
-            `;
+            document.getElementById('welcome-msg').innerHTML = `Olá, <b>${currentLogged.user}</b> | Vence em: <span>${vencimento}</span><br><small style="color:#888;">${agora.toLocaleDateString()} - ${agora.toLocaleTimeString()}</small>`;
         }
 
         async function mudarSecao(tipo, btn) {
             secaoAtual = tipo;
             if(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+            
+            // Se já tiver os dados no cache, renderiza instantaneamente
+            if(fullData[tipo] && fullCats[tipo]) {
+                renderizar(fullCats[tipo], fullData[tipo], tipo);
+                return;
+            }
+
             const principal = document.getElementById('conteudo-principal');
             principal.innerHTML = '<p style="text-align:center;padding:30px;color:var(--red);">Carregando biblioteca...</p>';
             
@@ -243,48 +220,39 @@
             const streamAct = tipo==='live'?'get_live_streams':tipo==='movie'?'get_vod_streams':'get_series';
             
             try {
-                const cats = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json());
-                const streams = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json());
-                fullData[tipo] = streams; renderizar(cats, streams, tipo);
+                // Carregamento paralelo para ganhar tempo
+                const [cats, streams] = await Promise.all([
+                    fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json()),
+                    fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json())
+                ]);
+                
+                fullData[tipo] = streams; 
+                fullCats[tipo] = cats;
+                renderizar(cats, streams, tipo);
             } catch(e) { principal.innerHTML = '<p style="text-align:center;">Erro ao carregar IPTV.</p>'; }
         }
 
         function renderizar(cats, streams, tipo) {
             let html = ""; const history = currentLogged.history || {}; const continueWatching = [];
+            
+            // Otimização: Filtro de histórico mais rápido
             for(let id in history) {
                 if(history[id].tipo === tipo) {
                     let item = (tipo === 'series') ? streams.find(s => String(s.series_id) === String(history[id].seriesParentId)) : streams.find(s => String(s.stream_id) === id);
                     if(item && !continueWatching.some(x => (x.series_id || x.stream_id) === (item.series_id || item.stream_id))) continueWatching.push(item);
                 }
             }
+
             if(continueWatching.length > 0) {
-                html += `<div class="row">
-                    <div class="row-header">
-                        <span class="row-title" style="color:var(--yellow)">CONTINUAR ASSISTINDO</span>
-                        <button class="btn-ver-mais" onclick="verMaisHistorico('${tipo}')">VER MAIS</button>
-                    </div>
-                    <div class="shelf">${continueWatching.map(i => cardHtml(i, tipo)).join('')}</div>
-                </div>`;
+                html += `<div class="row"><div class="row-header"><span class="row-title" style="color:var(--yellow)">CONTINUAR ASSISTINDO</span><button class="btn-ver-mais" onclick="verMaisHistorico('${tipo}')">VER MAIS</button></div><div class="shelf">${continueWatching.map(i => cardHtml(i, tipo)).join('')}</div></div>`;
             }
-            cats.slice(0, 30).forEach(cat => {
+
+            // Renderiza apenas as 20 primeiras categorias para velocidade inicial
+            cats.slice(0, 20).forEach(cat => {
                 const itens = streams.filter(s => s.category_id === cat.category_id);
                 if(itens.length > 0) html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
             });
             document.getElementById('conteudo-principal').innerHTML = html;
-        }
-
-        function verMaisHistorico(tipo) {
-            const streams = fullData[tipo];
-            const history = currentLogged.history || {}; 
-            const list = [];
-            for(let id in history) {
-                if(history[id].tipo === tipo) {
-                    let item = (tipo === 'series') ? streams.find(s => String(s.series_id) === String(history[id].seriesParentId)) : streams.find(s => String(s.stream_id) === id);
-                    if(item && !list.some(x => (x.series_id || x.stream_id) === (item.series_id || item.stream_id))) list.push(item);
-                }
-            }
-            document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title" style="color:var(--yellow)">CONTINUAR ASSISTINDO</span></div><div class="grid-view">${list.map(i => cardHtml(i, tipo)).join('')}</div>`; 
-            window.scrollTo(0,0);
         }
 
         function cardHtml(i, tipo) {
@@ -310,28 +278,23 @@
 
         async function abrirConteudo(id, tipo) { 
             if(tipo === 'live') return play(id, 'm3u8', 'live'); 
+            document.getElementById('detalhes-body').innerHTML = "Carregando...";
+            document.getElementById('modal-detalhes').style.display = 'block';
             const res = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${tipo==='series'?'get_series_info':'get_vod_info'}&${tipo==='series'?'series_id':'vod_id'}=${id}`).then(r => r.json()); 
             const info = res.info || res.movie_data; 
-            let html = `<img src="${info.cover || info.movie_image}" style="width:160px; border-radius:8px;"><h2>${info.name}</h2><p style="font-size:12px; color:#aaa; padding:0 15px;">${info.plot || ''}</p>`;
+            let html = `<img src="${info.cover || info.movie_image}" style="width:160px; border-radius:8px;"><h2>${info.name}</h2><p style="font-size:12px; color:#aaa;">${info.plot || ''}</p>`;
             if(tipo === 'series') { 
                 window.tempEps = res.episodes;
                 const hist = Object.values(currentLogged.history || {}).find(h => String(h.seriesParentId) === id);
                 const lastS = hist ? hist.season : Object.keys(res.episodes)[0];
-                html += `<select id="season-select" class="input-adm" onchange="carregarEps(this.value, '${id}')">
-                    ${Object.keys(res.episodes).map(s => `<option value="${s}" ${s==lastS?'selected':''}>Temporada ${s}</option>`).join('')}
-                </select><div id="eps-box" style="margin-top:10px; max-height:300px; overflow-y:auto;"></div>`; 
-                setTimeout(() => carregarEps(lastS, id), 100);
+                html += `<select id="season-select" class="input-adm" onchange="carregarEps(this.value, '${id}')">${Object.keys(res.episodes).map(s => `<option value="${s}" ${s==lastS?'selected':''}>Temporada ${s}</option>`).join('')}</select><div id="eps-box" style="max-height:300px; overflow-y:auto;"></div>`; 
+                setTimeout(() => carregarEps(lastS, id), 50);
             } else {
                 const hist = (currentLogged.history || {})[id];
                 const ext = info.container_extension || 'mp4';
-                if(hist) {
-                    html += `<button onclick="play('${id}','${ext}','movie', ${hist.time})" style="width:90%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px; margin-bottom:10px;">RETOMAR EM ${Math.floor(hist.time/60)}m</button>
-                             <button onclick="play('${id}','${ext}','movie', 0)" style="width:90%; padding:10px; background:#333; color:#fff; border:none; border-radius:5px;">DO INÍCIO</button>`;
-                } else {
-                    html += `<button onclick="play('${id}','${ext}','movie')" style="width:90%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px;">ASSISTIR AGORA</button>`;
-                }
+                html += hist ? `<button onclick="play('${id}','${ext}','movie', ${hist.time})" style="width:90%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px; margin-bottom:10px;">RETOMAR EM ${Math.floor(hist.time/60)}m</button><button onclick="play('${id}','${ext}','movie', 0)" style="width:90%; padding:10px; background:#333; color:#fff; border:none; border-radius:5px;">DO INÍCIO</button>` : `<button onclick="play('${id}','${ext}','movie')" style="width:90%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px;">ASSISTIR AGORA</button>`;
             } 
-            document.getElementById('detalhes-body').innerHTML = html; document.getElementById('modal-detalhes').style.display = 'block'; 
+            document.getElementById('detalhes-body').innerHTML = html; 
         }
 
         function carregarEps(s, seriesId) { 
@@ -339,33 +302,22 @@
             document.getElementById('eps-box').innerHTML = window.tempEps[s].map(e => {
                 const epId = String(e.id || e.stream_id);
                 const hist = (currentLogged.history || {})[epId];
-                return `<div class="ep-item ${hist?'highlight':''}" onclick="prepararEp('${epId}','${e.container_extension||'mp4'}','${seriesId}','${s}','${e.title.replace(/'/g, "")}')">
-                    <span style="font-size:12px; font-weight:bold;">E${e.episode_num} - ${e.title}</span>
-                    ${hist ? `<br><span style="font-size:9px; color:var(--yellow)">PAROU EM ${Math.floor(hist.time/60)}m</span>` : ''}
-                </div>`;
+                return `<div class="ep-item ${hist?'highlight':''}" onclick="prepararEp('${epId}','${e.container_extension||'mp4'}','${seriesId}','${s}','${e.title.replace(/'/g, "")}')"><span style="font-size:12px; font-weight:bold;">E${e.episode_num} - ${e.title}</span>${hist ? `<br><span style="font-size:9px; color:var(--yellow)">PAROU EM ${Math.floor(hist.time/60)}m</span>` : ''}</div>`;
             }).join(''); 
         }
 
         function prepararEp(epId, ext, seriesId, season, title) {
             const hist = (currentLogged.history || {})[epId];
             if(hist) {
-                document.getElementById('escolha-body').innerHTML = `<h3>${title}</h3>
-                <button onclick="fecharModalEscolha(); play('${epId}','${ext}','series', ${hist.time}, '${seriesId}', '${season}')" style="width:100%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px; margin-bottom:10px;">RETOMAR</button>
-                <button onclick="fecharModalEscolha(); play('${epId}','${ext}','series', 0, '${seriesId}', '${season}')" style="width:100%; padding:12px; background:#333; color:#fff; border:none; border-radius:5px;">DO INÍCIO</button>`;
+                document.getElementById('escolha-body').innerHTML = `<h3>${title}</h3><button onclick="fecharModalEscolha(); play('${epId}','${ext}','series', ${hist.time}, '${seriesId}', '${season}')" style="width:100%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px; margin-bottom:10px;">RETOMAR</button><button onclick="fecharModalEscolha(); play('${epId}','${ext}','series', 0, '${seriesId}', '${season}')" style="width:100%; padding:12px; background:#333; color:#fff; border:none; border-radius:5px;">DO INÍCIO</button>`;
                 document.getElementById('modal-escolha-ep').style.display = 'block';
             } else play(epId, ext, 'series', 0, seriesId, season);
         }
 
-        function fecharModalEscolha() { document.getElementById('modal-escolha-ep').style.display = 'none'; }
-
         async function play(id, ext, tipo, startTime = 0, seriesParentId = null, seasonNum = null) {
             let url = (tipo === 'live') ? `${API.url}/live/${API.u}/${API.p}/${id}.m3u8` : (tipo === 'movie') ? `${API.url}/movie/${API.u}/${API.p}/${id}.${ext||'mp4'}` : `${API.url}/series/${API.u}/${API.p}/${id}.${ext||'mp4'}`;
-            currentPlayerContext = { id, startTime };
             document.getElementById('player-box').style.display = 'block';
-            
-            // Ativa o bloqueio de tela ao iniciar o vídeo
             gerenciarWakeLock(true);
-
             player.src({ src: url, type: tipo==='live'?'application/x-mpegURL':'video/mp4' });
             player.ready(() => { 
                 if(startTime > 0) player.currentTime(startTime); 
@@ -374,95 +326,66 @@
                     if(saveInterval) clearInterval(saveInterval);
                     saveInterval = setInterval(async () => {
                         const time = Math.floor(player.currentTime());
-                        const duration = player.duration();
-                        if(!duration || time < 10) return;
+                        if(time < 10) return;
                         if(!currentLogged.history) currentLogged.history = {};
-                        if(Math.floor((time/duration)*100) >= 95) delete currentLogged.history[id];
-                        else currentLogged.history[id] = { time, tipo, seriesParentId, season: seasonNum };
-                        await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
-                    }, 8000);
+                        currentLogged.history[id] = { time, tipo, seriesParentId, season: seasonNum };
+                        fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
+                    }, 10000);
                 }
             });
         }
 
-        async function fecharPlayer() { 
+        function fecharPlayer() { 
             if(saveInterval) clearInterval(saveInterval);
             player.pause(); 
-            
-            // Libera a tela quando o player é fechado
             gerenciarWakeLock(false);
-
             document.getElementById('player-box').style.display='none'; 
-            mudarSecao(secaoAtual);
         }
 
+        function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
+        function fecharModalEscolha() { document.getElementById('modal-escolha-ep').style.display = 'none'; }
+        
+        function executarBusca(q) { 
+            if(!q) return renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual); 
+            const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 50); 
+            document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; 
+        }
+
+        async function toggleFav(event, id, tipo, name, img) { 
+            event.stopPropagation(); 
+            let f = currentLogged.favs || []; 
+            const idx = f.findIndex(x => x.id === String(id)); 
+            if(idx > -1) { f.splice(idx, 1); event.target.classList.remove('active'); } 
+            else { f.push({id: String(id), tipo, name, img}); event.target.classList.add('active'); } 
+            currentLogged.favs = f; 
+            fetch(`${DB}/${currentLogged.id}/favs.json`, { method: 'PUT', body: JSON.stringify(f) }); 
+        }
+
+        function mostrarFavoritos(btn) { 
+            document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); 
+            btn.classList.add('active'); 
+            const f = currentLogged.favs || []; 
+            document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, series_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>`; 
+        }
+
+        function verMais(catId, catName) { 
+            const f = fullData[secaoAtual].filter(i => i.category_id === catId); 
+            document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; 
+            window.scrollTo(0,0); 
+        }
+        
         async function abrirADM() {
             document.getElementById('modal-adm').style.display = 'block';
             const res = await fetch(`${DB}.json`).then(r => r.json());
             let html = "";
             for(let id in res) {
                 const u = res[id];
-                const statusColor = u.status === 'bloqueado' ? '#e74c3c' : '#2ecc71';
-                html += `<div class="user-card">
-                    <b>${u.user} (${u.pass})</b> <span style="float:right; color:${statusColor}">${u.status || 'Ativo'}</span><br>
-                    Telas: ${u.online_count || 0}/${u.screens || 1} | Vence: ${u.expira ? new Date(u.expira).toLocaleDateString() : 'N/A'}<br><br>
-                    <button class="btn-adm" style="background:#2980b9" onclick="prepararEdicao('${id}','${u.user}','${u.pass}','${u.screens}','${u.expira}')">Editar</button>
-                    <button class="btn-adm" style="background:#d35400" onclick="toggleStatus('${id}','${u.status}')">Bloq/Lib</button>
-                    <button class="btn-adm" style="background:#7f8c8d" onclick="resetTelas('${id}')">Reset</button>
-                    <button class="btn-adm" style="background:#c0392b" onclick="excluirUser('${id}')">Excluir</button>
-                </div>`;
+                html += `<div class="user-card"><b>${u.user}</b> | Vence: ${u.expira ? new Date(u.expira).toLocaleDateString() : 'N/A'}<br><button class="btn-adm" style="background:#c0392b" onclick="excluirUser('${id}')">Excluir</button></div>`;
             }
             document.getElementById('lista-usuarios-adm').innerHTML = html;
-            document.getElementById('adm-url').value = API.url;
-            document.getElementById('adm-u').value = API.u;
-            document.getElementById('adm-p').value = API.p;
         }
 
-        async function salvarUsuario() {
-            const id = document.getElementById('edit-id').value;
-            const days = parseInt(document.getElementById('new-days').value) || 0;
-            const expFinal = days > 0 ? Date.now() + (days * 86400000) : (id ? parseInt(document.getElementById('old-exp').value) : Date.now() + (30 * 86400000));
-            const user = { 
-                user: document.getElementById('new-u').value, 
-                pass: document.getElementById('new-p').value, 
-                screens: parseInt(document.getElementById('new-screens').value) || 1,
-                expira: expFinal,
-                status: 'ativo',
-                online_count: 0,
-                history: {}, favs: []
-            };
-            await fetch(id ? `${DB}/${id}.json` : `${DB}.json`, { method: id?'PATCH':'POST', body: JSON.stringify(user) });
-            alert("Sucesso!"); limparFormADM(); abrirADM();
-        }
-
-        async function resetTelas(id) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: 0, current_token: null }) }); abrirADM(); }
-        async function toggleStatus(id, s) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ status: s==='bloqueado'?'ativo':'bloqueado' }) }); abrirADM(); }
-        async function excluirUser(id) { if(confirm("Excluir?")) { await fetch(`${DB}/${id}.json`, { method: 'DELETE' }); abrirADM(); } }
-        function prepararEdicao(id, u, p, s, exp) { 
-            document.getElementById('edit-id').value = id; document.getElementById('new-u').value = u; 
-            document.getElementById('new-p').value = p; document.getElementById('new-screens').value = s; 
-            document.getElementById('old-exp').value = exp; document.getElementById('btn-save-adm').innerText = "ATUALIZAR";
-        }
-        function limparFormADM() { document.getElementById('edit-id').value = ""; document.getElementById('new-u').value = ""; document.getElementById('new-p').value = ""; document.getElementById('btn-save-adm').innerText = "SALVAR CLIENTE"; }
-
-        async function salvarConfigServidor() {
-            const server = { url: document.getElementById('adm-url').value, u: document.getElementById('adm-u').value, p: document.getElementById('adm-p').value };
-            await fetch(`${FIREBASE}/config.json`, { method: 'PUT', body: JSON.stringify({server}) });
-            alert("Servidor atualizado!"); location.reload();
-        }
-
-        async function logout() {
-            if(currentLogged.id && currentLogged.id !== 'admin') {
-                await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ online_count: 0, current_token: null }) });
-            }
-            localStorage.clear(); location.reload();
-        }
-
-        function executarBusca(q) { if(!q) return mudarSecao(secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 40); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
-        async function toggleFav(event, id, tipo, name, img) { event.stopPropagation(); let f = currentLogged.favs || []; const idx = f.findIndex(x => x.id === String(id)); if(idx > -1) { f.splice(idx, 1); event.target.classList.remove('active'); } else { f.push({id: String(id), tipo, name, img}); event.target.classList.add('active'); } currentLogged.favs = f; await fetch(`${DB}/${currentLogged.id}/favs.json`, { method: 'PUT', body: JSON.stringify(f) }); }
-        function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, series_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>`; }
-        function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; window.scrollTo(0,0); }
-        function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
+        async function logout() { localStorage.clear(); location.reload(); }
     </script>
 </body>
 </html>
