@@ -123,6 +123,7 @@
         var fullData = {}; var currentLogged = {}; var secaoAtual = 'live'; var saveInterval = null;
         var currentPlayerContext = { id: null, startTime: 0 };
         var relogioInterval = null;
+        var wakeLock = null; // Váriavel para o bloqueio de tela
 
         window.onload = async () => {
             await carregarConfigServidor();
@@ -134,6 +135,27 @@
                 autenticar(true);
             }
         };
+
+        // FUNÇÃO PARA MANTER A TELA ACESA
+        async function solicitarWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log("Bloqueio de tela ativo!");
+                }
+            } catch (err) {
+                console.log("Erro ao manter tela acesa: " + err.message);
+            }
+        }
+
+        function liberarWakeLock() {
+            if (wakeLock !== null) {
+                wakeLock.release().then(() => {
+                    wakeLock = null;
+                    console.log("Bloqueio de tela liberado.");
+                });
+            }
+        }
 
         async function carregarConfigServidor() {
             try {
@@ -336,6 +358,10 @@
         async function play(id, ext, tipo, startTime = 0, seriesParentId = null, seasonNum = null) {
             let url = (tipo === 'live') ? `${API.url}/live/${API.u}/${API.p}/${id}.m3u8` : (tipo === 'movie') ? `${API.url}/movie/${API.u}/${API.p}/${id}.${ext||'mp4'}` : `${API.url}/series/${API.u}/${API.p}/${id}.${ext||'mp4'}`;
             currentPlayerContext = { id, startTime };
+            
+            // ATIVA O BLOQUEIO DE TELA AO DAR PLAY
+            solicitarWakeLock();
+
             document.getElementById('player-box').style.display = 'block';
             player.src({ src: url, type: tipo==='live'?'application/x-mpegURL':'video/mp4' });
             player.ready(() => { 
@@ -359,6 +385,10 @@
         async function fecharPlayer() { 
             if(saveInterval) clearInterval(saveInterval);
             player.pause(); 
+            
+            // LIBERA A TELA PARA APAGAR NORMALMENTE QUANDO SAIR DO PLAYER
+            liberarWakeLock();
+
             document.getElementById('player-box').style.display='none'; 
             mudarSecao(secaoAtual);
         }
