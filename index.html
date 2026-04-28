@@ -123,39 +123,31 @@
         var fullData = {}; var currentLogged = {}; var secaoAtual = 'live'; var saveInterval = null;
         var currentPlayerContext = { id: null, startTime: 0 };
         var relogioInterval = null;
-        var wakeLock = null; 
 
-        // NOVO: Função robusta para manter tela ligada
-        async function solicitarWakeLock() {
+        // --- SISTEMA ANTI-BLOQUEIO DE TELA (WAKE LOCK) ---
+        let wakeLock = null;
+        async function gerenciarWakeLock(ativar) {
             if ('wakeLock' in navigator) {
                 try {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    console.log("Tela bloqueada para não apagar.");
-                    
-                    // Se o app for minimizado e voltar, re-ativa o lock
-                    wakeLock.addEventListener('release', () => {
-                        console.log('Wake Lock liberado.');
-                    });
+                    if (ativar) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        console.log("Anti-bloqueio ativado");
+                    } else if (wakeLock) {
+                        await wakeLock.release();
+                        wakeLock = null;
+                        console.log("Anti-bloqueio liberado");
+                    }
                 } catch (err) {
-                    console.error(`${err.name}, ${err.message}`);
+                    console.error("Erro no WakeLock: ", err);
                 }
             }
         }
-
-        // Re-ativa o lock se o usuário voltar para a aba do navegador
+        // Re-ativar se o usuário sair e voltar para o app com o player aberto
         document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible') {
-                await solicitarWakeLock();
+            if (wakeLock !== null && document.visibilityState === 'visible' && document.getElementById('player-box').style.display === 'block') {
+                wakeLock = await navigator.wakeLock.request('screen');
             }
         });
-
-        function liberarWakeLock() {
-            if (wakeLock !== null) {
-                wakeLock.release().then(() => {
-                    wakeLock = null;
-                });
-            }
-        }
 
         window.onload = async () => {
             await carregarConfigServidor();
@@ -369,11 +361,11 @@
         async function play(id, ext, tipo, startTime = 0, seriesParentId = null, seasonNum = null) {
             let url = (tipo === 'live') ? `${API.url}/live/${API.u}/${API.p}/${id}.m3u8` : (tipo === 'movie') ? `${API.url}/movie/${API.u}/${API.p}/${id}.${ext||'mp4'}` : `${API.url}/series/${API.u}/${API.p}/${id}.${ext||'mp4'}`;
             currentPlayerContext = { id, startTime };
-            
-            // ATIVA O BLOQUEIO DE TELA AO DAR PLAY
-            await solicitarWakeLock();
-
             document.getElementById('player-box').style.display = 'block';
+            
+            // Ativa o bloqueio de tela ao iniciar o vídeo
+            gerenciarWakeLock(true);
+
             player.src({ src: url, type: tipo==='live'?'application/x-mpegURL':'video/mp4' });
             player.ready(() => { 
                 if(startTime > 0) player.currentTime(startTime); 
@@ -397,8 +389,8 @@
             if(saveInterval) clearInterval(saveInterval);
             player.pause(); 
             
-            // LIBERA A TELA PARA APAGAR NORMALMENTE QUANDO SAIR DO PLAYER
-            liberarWakeLock();
+            // Libera a tela quando o player é fechado
+            gerenciarWakeLock(false);
 
             document.getElementById('player-box').style.display='none'; 
             mudarSecao(secaoAtual);
