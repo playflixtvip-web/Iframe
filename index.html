@@ -123,7 +123,39 @@
         var fullData = {}; var currentLogged = {}; var secaoAtual = 'live'; var saveInterval = null;
         var currentPlayerContext = { id: null, startTime: 0 };
         var relogioInterval = null;
-        var wakeLock = null; // Váriavel para o bloqueio de tela
+        var wakeLock = null; 
+
+        // NOVO: Função robusta para manter tela ligada
+        async function solicitarWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log("Tela bloqueada para não apagar.");
+                    
+                    // Se o app for minimizado e voltar, re-ativa o lock
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Wake Lock liberado.');
+                    });
+                } catch (err) {
+                    console.error(`${err.name}, ${err.message}`);
+                }
+            }
+        }
+
+        // Re-ativa o lock se o usuário voltar para a aba do navegador
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await solicitarWakeLock();
+            }
+        });
+
+        function liberarWakeLock() {
+            if (wakeLock !== null) {
+                wakeLock.release().then(() => {
+                    wakeLock = null;
+                });
+            }
+        }
 
         window.onload = async () => {
             await carregarConfigServidor();
@@ -135,27 +167,6 @@
                 autenticar(true);
             }
         };
-
-        // FUNÇÃO PARA MANTER A TELA ACESA
-        async function solicitarWakeLock() {
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    console.log("Bloqueio de tela ativo!");
-                }
-            } catch (err) {
-                console.log("Erro ao manter tela acesa: " + err.message);
-            }
-        }
-
-        function liberarWakeLock() {
-            if (wakeLock !== null) {
-                wakeLock.release().then(() => {
-                    wakeLock = null;
-                    console.log("Bloqueio de tela liberado.");
-                });
-            }
-        }
 
         async function carregarConfigServidor() {
             try {
@@ -360,7 +371,7 @@
             currentPlayerContext = { id, startTime };
             
             // ATIVA O BLOQUEIO DE TELA AO DAR PLAY
-            solicitarWakeLock();
+            await solicitarWakeLock();
 
             document.getElementById('player-box').style.display = 'block';
             player.src({ src: url, type: tipo==='live'?'application/x-mpegURL':'video/mp4' });
