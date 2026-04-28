@@ -39,7 +39,7 @@
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 1000; overflow-y: auto; padding: 15px; }
         .close-modal { position: absolute; top: 15px; right: 15px; font-size: 28px; color: #fff; cursor: pointer; z-index: 1001; }
         .user-card { background: #111; padding: 12px; border-radius: 10px; margin-bottom: 12px; border: 1px solid #333; font-size: 11px; }
-        .btn-adm { border: none; padding: 8px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #fff; cursor: pointer; margin-top: 5px; }
+        .btn-adm { border: none; padding: 8px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #fff; cursor: pointer; }
         .input-adm { width: 100%; padding: 10px; margin-bottom: 10px; background: #222; border: 1px solid #333; color: #fff; border-radius: 5px; box-sizing: border-box; }
         #player-box { display: none; position: fixed; inset: 0; background: #000; z-index: 2000; }
         .ep-item { padding: 15px; border-bottom: 1px solid #222; text-align: left; background: #111; margin-bottom: 5px; border-radius: 5px; cursor: pointer; }
@@ -128,6 +128,7 @@
         var currentSeriesParent = null;
         var currentSeason = null;
 
+        // IDENTIFICADOR DE DISPOSITIVO
         function obterDeviceId() {
             let id = localStorage.getItem('clone_device_id');
             if (!id) {
@@ -171,6 +172,7 @@
 
             if(!u || !p) return;
 
+            // Login Admin Rhuan
             if(u === "Rhuan" && p === "270412") { 
                 currentLogged = { user: "Rhuan", adm: true, id: "admin", history: {}, favs: [], screens: 99, expira: 4102444800000 }; 
                 entrar(); return; 
@@ -184,6 +186,8 @@
                     const user = res[id];
                     if(user.user === u && user.pass === p) {
                         found = true;
+                        
+                        // BLOQUEIO POR STATUS E VENCIMENTO
                         if(user.status === 'bloqueado' || user.status === 'suspenso') {
                             statusDiv.innerText = "ACESSO BLOQUEADO!";
                             return alert("Sua conta está BLOQUEADA ou SUSPENSA!");
@@ -192,6 +196,8 @@
                             statusDiv.innerText = "ACESSO VENCIDO!";
                             return alert("Seu acesso VENCEU!");
                         }
+
+                        // CONTROLE DE TELAS (DEVICE ID)
                         let aparelhos = user.active_devices || [];
                         if (!aparelhos.includes(deviceId)) {
                             if (aparelhos.length >= (user.screens || 1)) {
@@ -201,9 +207,11 @@
                             aparelhos.push(deviceId);
                             await fetch(`${DB}/${id}/active_devices.json`, { method: 'PUT', body: JSON.stringify(aparelhos) });
                         }
+
                         currentLogged = user; 
                         currentLogged.id = id;
                         currentLogged.active_devices = aparelhos;
+                        
                         localStorage.setItem('clone_creds', JSON.stringify({u, p}));
                         entrar(); break;
                     }
@@ -255,21 +263,23 @@
                 }
             }
             if(continueWatching.length > 0) {
+                // Adicionado botão Ver Mais para o Continuar Assistindo
                 html += `<div class="row">
                     <div class="row-header">
                         <span class="row-title" style="color:var(--yellow)">CONTINUAR ASSISTINDO</span>
-                        <button class="btn-ver-mais" onclick="verMaisHistorico('${tipo}')">VER TUDO</button>
+                        <button class="btn-ver-mais" onclick="verMaisHistorico('${tipo}')">VER MAIS</button>
                     </div>
-                    <div class="shelf">${continueWatching.slice(0, 15).map(i => cardHtml(i, tipo)).join('')}</div>
+                    <div class="shelf">${continueWatching.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div>
                 </div>`;
             }
             cats.slice(0, 30).forEach(cat => {
                 const itens = streams.filter(s => s.category_id === cat.category_id);
-                if(itens.length > 0) html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 12).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
+                if(itens.length > 0) html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
             });
             document.getElementById('conteudo-principal').innerHTML = html;
         }
 
+        // Função específica para ver todos os itens do histórico de progresso
         function verMaisHistorico(tipo) {
             const streams = fullData[tipo];
             const history = currentLogged.history || {};
@@ -358,9 +368,11 @@
         async function play(id, ext, tipo, startTime = 0, seriesParentId = null, seasonNum = null) {
             currentPlayingId = id; currentPlayingType = tipo; currentSeriesParent = seriesParentId; currentSeason = seasonNum;
             let url = (tipo === 'live') ? `${API.url}/live/${API.u}/${API.p}/${id}.m3u8` : (tipo === 'movie') ? `${API.url}/movie/${API.u}/${API.p}/${id}.${ext||'mp4'}` : `${API.url}/series/${API.u}/${API.p}/${id}.${ext||'mp4'}`;
+            
             await solicitarWakeLock();
             document.getElementById('player-box').style.display = 'block';
             player.src({ src: url, type: tipo==='live'?'application/x-mpegURL':'video/mp4' });
+            
             player.ready(() => { 
                 if(startTime > 0) player.currentTime(startTime); 
                 player.play(); 
@@ -376,9 +388,18 @@
             const time = Math.floor(player.currentTime());
             const duration = player.duration();
             if(!duration || isNaN(duration)) return;
+            
             if(!currentLogged.history) currentLogged.history = {};
             const percent = (time / duration) * 100;
-            if (time < 10) return;
+
+            if (time < 10) {
+                if (currentLogged.history[currentPlayingId]) {
+                    delete currentLogged.history[currentPlayingId];
+                    await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
+                }
+                return;
+            }
+
             if (percent >= 90) {
                 if (currentLogged.history[currentPlayingId]) {
                     delete currentLogged.history[currentPlayingId];
@@ -412,18 +433,9 @@
                     <button class="btn-adm" style="background:#2980b9" onclick="prepararEdicao('${id}','${u.user}','${u.pass}','${u.screens}','${u.expira}')">Editar</button>
                     <button class="btn-adm" style="background:#d35400" onclick="toggleStatus('${id}','${u.status}')">Bloq/Lib</button>
                     <button class="btn-adm" style="background:#c0392b" onclick="excluirUser('${id}')">Excluir</button>
-                    <button class="btn-adm" style="background:#8e44ad; display:block; width:100%; margin-top:8px;" onclick="limparHistoricoUser('${id}')">LIMPAR HISTÓRICO</button>
                 </div>`;
             }
             document.getElementById('lista-usuarios-adm').innerHTML = html;
-        }
-
-        async function limparHistoricoUser(id) {
-            if(confirm("Deseja apagar todo o progresso de vídeos deste usuário?")) {
-                await fetch(`${DB}/${id}/history.json`, { method: 'DELETE' });
-                alert("Histórico removido com sucesso!");
-                abrirADM();
-            }
         }
 
         async function salvarUsuario() {
