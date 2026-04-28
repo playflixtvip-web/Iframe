@@ -263,9 +263,13 @@
                 }
             }
             if(continueWatching.length > 0) {
+                // Adicionado botão Ver Mais para o Continuar Assistindo
                 html += `<div class="row">
-                    <div class="row-header"><span class="row-title" style="color:var(--yellow)">CONTINUAR ASSISTINDO</span></div>
-                    <div class="shelf">${continueWatching.map(i => cardHtml(i, tipo)).join('')}</div>
+                    <div class="row-header">
+                        <span class="row-title" style="color:var(--yellow)">CONTINUAR ASSISTINDO</span>
+                        <button class="btn-ver-mais" onclick="verMaisHistorico('${tipo}')">VER MAIS</button>
+                    </div>
+                    <div class="shelf">${continueWatching.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div>
                 </div>`;
             }
             cats.slice(0, 30).forEach(cat => {
@@ -273,6 +277,21 @@
                 if(itens.length > 0) html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
             });
             document.getElementById('conteudo-principal').innerHTML = html;
+        }
+
+        // Função específica para ver todos os itens do histórico de progresso
+        function verMaisHistorico(tipo) {
+            const streams = fullData[tipo];
+            const history = currentLogged.history || {};
+            const continueWatching = [];
+            for(let id in history) {
+                if(history[id].tipo === tipo) {
+                    let item = (tipo === 'series') ? streams.find(s => String(s.series_id) === String(history[id].seriesParentId)) : streams.find(s => String(s.stream_id) === id);
+                    if(item && !continueWatching.some(x => (x.series_id || x.stream_id) === (item.series_id || item.stream_id))) continueWatching.push(item);
+                }
+            }
+            document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">CONTINUAR ASSISTINDO</span></div><div class="grid-view">${continueWatching.map(i => cardHtml(i, tipo)).join('')}</div>`;
+            window.scrollTo(0,0);
         }
 
         function cardHtml(i, tipo) {
