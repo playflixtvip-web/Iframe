@@ -128,7 +128,6 @@
         var currentSeriesParent = null;
         var currentSeason = null;
 
-        // IDENTIFICADOR DE DISPOSITIVO
         function obterDeviceId() {
             let id = localStorage.getItem('clone_device_id');
             if (!id) {
@@ -172,7 +171,6 @@
 
             if(!u || !p) return;
 
-            // Login Admin Rhuan
             if(u === "Rhuan" && p === "270412") { 
                 currentLogged = { user: "Rhuan", adm: true, id: "admin", history: {}, favs: [], screens: 99, expira: 4102444800000 }; 
                 entrar(); return; 
@@ -187,7 +185,6 @@
                     if(user.user === u && user.pass === p) {
                         found = true;
                         
-                        // BLOQUEIO POR STATUS E VENCIMENTO
                         if(user.status === 'bloqueado' || user.status === 'suspenso') {
                             statusDiv.innerText = "ACESSO BLOQUEADO!";
                             return alert("Sua conta está BLOQUEADA ou SUSPENSA!");
@@ -197,7 +194,6 @@
                             return alert("Seu acesso VENCEU!");
                         }
 
-                        // CONTROLE DE TELAS (DEVICE ID)
                         let aparelhos = user.active_devices || [];
                         if (!aparelhos.includes(deviceId)) {
                             if (aparelhos.length >= (user.screens || 1)) {
@@ -205,7 +201,14 @@
                                 return alert("Limite de telas atingido! Saia de outro aparelho primeiro.");
                             }
                             aparelhos.push(deviceId);
-                            await fetch(`${DB}/${id}/active_devices.json`, { method: 'PUT', body: JSON.stringify(aparelhos) });
+                            // AJUSTE AQUI: Salva aparelhos e atualiza contagem online para o Painel
+                            await fetch(`${DB}/${id}.json`, { 
+                                method: 'PATCH', 
+                                body: JSON.stringify({ 
+                                    active_devices: aparelhos,
+                                    online_count: aparelhos.length 
+                                }) 
+                            });
                         }
 
                         currentLogged = user; 
@@ -263,7 +266,6 @@
                 }
             }
             if(continueWatching.length > 0) {
-                // Adicionado botão Ver Mais para o Continuar Assistindo
                 html += `<div class="row">
                     <div class="row-header">
                         <span class="row-title" style="color:var(--yellow)">CONTINUAR ASSISTINDO</span>
@@ -279,7 +281,6 @@
             document.getElementById('conteudo-principal').innerHTML = html;
         }
 
-        // Função específica para ver todos os itens do histórico de progresso
         function verMaisHistorico(tipo) {
             const streams = fullData[tipo];
             const history = currentLogged.history || {};
@@ -455,7 +456,14 @@
                 const deviceId = obterDeviceId();
                 let aparelhos = currentLogged.active_devices || [];
                 aparelhos = aparelhos.filter(id => id !== deviceId);
-                await fetch(`${DB}/${currentLogged.id}/active_devices.json`, { method: 'PUT', body: JSON.stringify(aparelhos) });
+                // AJUSTE AQUI: Limpa o dispositivo e atualiza a contagem online ao sair
+                await fetch(`${DB}/${currentLogged.id}.json`, { 
+                    method: 'PATCH', 
+                    body: JSON.stringify({ 
+                        active_devices: aparelhos,
+                        online_count: aparelhos.length 
+                    }) 
+                });
             }
             localStorage.removeItem('clone_creds'); 
             location.reload(); 
