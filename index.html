@@ -127,6 +127,7 @@
         var currentPlayingType = null;
         var currentSeriesParent = null;
         var currentSeason = null;
+        var monitorSessaoInterval = null;
 
         function obterDeviceId() {
             let id = localStorage.getItem('clone_device_id');
@@ -194,14 +195,15 @@
                             return alert("Seu acesso VENCEU!");
                         }
 
-                        let aparelhos = user.active_devices || [];
+                        // AJUSTE DE LIMITE DE TELAS: Garante que a lista de aparelhos seja um Array
+                        let aparelhos = Array.isArray(user.active_devices) ? user.active_devices : [];
+                        
                         if (!aparelhos.includes(deviceId)) {
                             if (aparelhos.length >= (user.screens || 1)) {
                                 statusDiv.innerText = "LIMITE DE TELAS ATINGIDO!";
                                 return alert("Limite de telas atingido! Saia de outro aparelho primeiro.");
                             }
                             aparelhos.push(deviceId);
-                            // AJUSTE AQUI: Salva aparelhos e atualiza contagem online para o Painel
                             await fetch(`${DB}/${id}.json`, { 
                                 method: 'PATCH', 
                                 body: JSON.stringify({ 
@@ -228,10 +230,32 @@
             document.getElementById('app-ui').style.display='block'; 
             if(currentLogged.adm) document.getElementById('adm-btn').style.display='block';
             const venc = currentLogged.expira ? new Date(currentLogged.expira).toLocaleDateString() : "Vitalício";
+            
             if(relogioInterval) clearInterval(relogioInterval);
             atualizarRelogio(venc);
             relogioInterval = setInterval(() => atualizarRelogio(venc), 1000);
+
+            if(monitorSessaoInterval) clearInterval(monitorSessaoInterval);
+            monitorSessaoInterval = setInterval(verificarSessaoAtiva, 20000);
+
             mudarSecao('live'); 
+        }
+
+        async function verificarSessaoAtiva() {
+            if (!currentLogged.id || currentLogged.id === "admin") return;
+            try {
+                const res = await fetch(`${DB}/${currentLogged.id}.json`).then(r => r.json());
+                const deviceId = obterDeviceId();
+                // Se o ADM resetou, res.active_devices virá null ou vazio
+                if (!res || res.status === 'bloqueado' || !res.active_devices || !res.active_devices.includes(deviceId)) {
+                    forceLogout();
+                }
+            } catch (e) {}
+        }
+
+        function forceLogout() {
+            localStorage.removeItem('clone_creds');
+            location.reload();
         }
 
         function atualizarRelogio(vencimento) {
@@ -393,13 +417,7 @@
             if(!currentLogged.history) currentLogged.history = {};
             const percent = (time / duration) * 100;
 
-            if (time < 10) {
-                if (currentLogged.history[currentPlayingId]) {
-                    delete currentLogged.history[currentPlayingId];
-                    await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
-                }
-                return;
-            }
+            if (time < 10) return;
 
             if (percent >= 90) {
                 if (currentLogged.history[currentPlayingId]) {
@@ -427,16 +445,51 @@
             let html = "";
             for(let id in res) {
                 const u = res[id];
-                const ativos = u.active_devices ? u.active_devices.length : 0;
+                const ativos = Array.isArray(u.active_devices) ? u.active_devices.length : 0;
                 html += `<div class="user-card">
                     <b>${u.user} (${u.pass})</b> <span style="float:right; color:${u.status==='bloqueado'?'red':'green'}">${u.status||'ativo'}</span><br>
                     Telas: ${ativos}/${u.screens||1} | Vence: ${u.expira?new Date(u.expira).toLocaleDateString():'N/A'}<br><br>
                     <button class="btn-adm" style="background:#2980b9" onclick="prepararEdicao('${id}','${u.user}','${u.pass}','${u.screens}','${u.expira}')">Editar</button>
+                    <button class="btn-adm" style="background:#8e44ad" onclick="resetarTelas('${id}')">Reset Telas</button>
                     <button class="btn-adm" style="background:#d35400" onclick="toggleStatus('${id}','${u.status}')">Bloq/Lib</button>
                     <button class="btn-adm" style="background:#c0392b" onclick="excluirUser('${id}')">Excluir</button>
                 </div>`;
             }
             document.getElementById('lista-usuarios-adm').innerHTML = html;
+        }
+
+        async function resetarTelas(id) {
+            if(confirm("Deseja desconectar todos os aparelhos?")) {
+                await fetch(`${DB}/${id}.json`, { 
+                    method: 'PATCH', 
+                    body: JSON.stringify({ 
+                        active_devices: [],
+                        online_count: 0 
+                    }) 
+                });
+                alert("Telas liberadas!");
+                abrirADM();
+            }
+        }
+
+        async function logout() {
+            if (currentLogged && currentLogged.id !== "admin") {
+                try {
+                    const deviceId = obterDeviceId();
+                    const res = await fetch(`${DB}/${currentLogged.id}.json`).then(r => r.json());
+                    let aparelhos = (res && Array.isArray(res.active_devices)) ? res.active_devices : [];
+                    aparelhos = aparelhos.filter(id => id !== deviceId);
+                    await fetch(`${DB}/${currentLogged.id}.json`, { 
+                        method: 'PATCH', 
+                        body: JSON.stringify({ 
+                            active_devices: aparelhos,
+                            online_count: aparelhos.length 
+                        }) 
+                    });
+                } catch(e) {}
+            }
+            localStorage.removeItem('clone_creds'); 
+            location.reload(); 
         }
 
         async function salvarUsuario() {
@@ -449,24 +502,6 @@
             };
             await fetch(id ? `${DB}/${id}.json` : `${DB}.json`, { method: id?'PATCH':'POST', body: JSON.stringify(user) });
             limparFormADM(); abrirADM();
-        }
-
-        async function logout() {
-            if (currentLogged && currentLogged.id !== "admin") {
-                const deviceId = obterDeviceId();
-                let aparelhos = currentLogged.active_devices || [];
-                aparelhos = aparelhos.filter(id => id !== deviceId);
-                // AJUSTE AQUI: Limpa o dispositivo e atualiza a contagem online ao sair
-                await fetch(`${DB}/${currentLogged.id}.json`, { 
-                    method: 'PATCH', 
-                    body: JSON.stringify({ 
-                        active_devices: aparelhos,
-                        online_count: aparelhos.length 
-                    }) 
-                });
-            }
-            localStorage.removeItem('clone_creds'); 
-            location.reload(); 
         }
 
         async function toggleStatus(id, s) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ status: s==='bloqueado'?'ativo':'bloqueado' }) }); abrirADM(); }
