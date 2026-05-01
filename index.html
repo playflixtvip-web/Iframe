@@ -45,7 +45,6 @@
         /* PLAYER E BOTÕES DINÂMICOS */
         #player-box { display: none; position: fixed; inset: 0; background: #000; z-index: 2000; }
         
-        /* Estilo para os botões aparecerem apenas com os controles */
         .vjs-custom-jump-container {
             position: absolute;
             top: 50%;
@@ -61,7 +60,6 @@
             transition: opacity 0.3s;
         }
         
-        /* Quando o player está com controles visíveis (user active), mostra os botões */
         .vjs-user-active .vjs-custom-jump-container { opacity: 1; }
         
         .jump-btn-inner {
@@ -165,7 +163,6 @@
         
         var player = videojs('vid');
         
-        // CRIAÇÃO DOS BOTÕES DENTRO DO PLAYER
         const jumpContainer = document.createElement('div');
         jumpContainer.className = 'vjs-custom-jump-container';
         jumpContainer.id = 'jump-btns-ui';
@@ -173,7 +170,6 @@
             <button class="jump-btn-inner" onclick="pularTempo(-10)"><span>↺</span>10s</button>
             <button class="jump-btn-inner" onclick="pularTempo(10)"><span>↻</span>10s</button>
         `;
-        // Insere os botões dentro da div do Video.js para eles seguirem a lógica de visibilidade
         player.el().appendChild(jumpContainer);
 
         var fullData = {}; 
@@ -406,7 +402,6 @@
             currentPlayingId = id; currentPlayingType = tipo; currentSeriesParent = seriesParentId; currentSeason = seasonNum;
             let url = (tipo === 'live') ? `${API.url}/live/${API.u}/${API.p}/${id}.m3u8` : (tipo === 'movie') ? `${API.url}/movie/${API.u}/${API.p}/${id}.${ext||'mp4'}` : `${API.url}/series/${API.u}/${API.p}/${id}.${ext||'mp4'}`;
             
-            // Controle de visibilidade dos botões de pular
             document.getElementById('jump-btns-ui').style.visibility = (tipo === 'live') ? 'hidden' : 'visible';
 
             await solicitarWakeLock();
@@ -423,26 +418,30 @@
             });
         }
 
-        // Função para pular 10 segundos
         function pularTempo(segundos) {
             if(!player) return;
             let tempoAtual = player.currentTime();
             player.currentTime(tempoAtual + segundos);
-            // Garante que os controles sumam depois de um tempo após clicar
             player.userActive(true);
         }
 
         async function salvarProgressoFirebase() {
-            if(!currentPlayingId || currentPlayingType === 'live') return;
-            const time = Math.floor(player.currentTime()); const duration = player.duration(); if(!duration || isNaN(duration)) return;
-            if(!currentLogged.history) currentLogged.history = {}; const percent = (time / duration) * 100;
-            if (time < 10) return;
-            if (percent >= 90) {
+            if(!currentPlayingId || currentPlayingType === 'live' || !currentLogged.id) return;
+            const time = Math.floor(player.currentTime()); 
+            const duration = player.duration(); 
+            if(!duration || isNaN(duration)) return;
+            
+            const percent = (time / duration) * 100;
+            if(!currentLogged.history) currentLogged.history = {};
+
+            // Lógica: se estiver nos primeiros 10 segundos ou já passou de 90% (finalizado), remove do histórico
+            if (time < 10 || percent >= 90) {
                 if (currentLogged.history[currentPlayingId]) {
                     delete currentLogged.history[currentPlayingId];
                     await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
                 }
             } else {
+                // Caso contrário, salva o tempo atual
                 currentLogged.history[currentPlayingId] = { time, tipo: currentPlayingType, seriesParentId: currentSeriesParent, season: currentSeason };
                 await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
             }
