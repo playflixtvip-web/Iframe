@@ -111,7 +111,7 @@
     
     <div id="modal-escolha-ep" class="modal" style="z-index: 1100; background: rgba(0,0,0,0.95);"><span class="close-modal" onclick="fecharModalEscolha()">✕</span><div id="escolha-body" style="text-align:center; margin-top:30vh; padding:20px;"></div></div>
 
-    <div id="player-box"><span class="close-modal" onclick="fecharPlayer()" style="left:15px; top:15px;">✕</span><video id="vid" class="video-js vjs-fill vjs-big-play-centered" controls></video></div>
+    <div id="player-box" onclick="handlePlayerClick(event)"><span class="close-modal" onclick="fecharPlayer()" style="left:15px; top:15px;">✕</span><video id="vid" class="video-js vjs-fill vjs-big-play-centered" controls></video></div>
 
     <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
     <script>
@@ -120,7 +120,9 @@
         const DB = `${FIREBASE}/usuarios`;
         
         var player = videojs('vid');
-        var fullData = {}; var currentLogged = {}; var secaoAtual = 'live'; var saveInterval = null;
+        var fullData = {}; 
+        var fullCats = {}; 
+        var currentLogged = {}; var secaoAtual = 'live'; var saveInterval = null;
         var relogioInterval = null;
         var wakeLock = null; 
         var currentPlayingId = null;
@@ -128,6 +130,10 @@
         var currentSeriesParent = null;
         var currentSeason = null;
         var monitorSessaoInterval = null;
+        
+        // Controle de tempo de reprodução na sessão atual
+        var playbackSessionStartTime = 0;
+        var lastClickTime = 0;
 
         function obterDeviceId() {
             let id = localStorage.getItem('clone_device_id');
@@ -195,7 +201,6 @@
                             return alert("Seu acesso VENCEU!");
                         }
 
-                        // AJUSTE DE LIMITE DE TELAS: Garante que a lista de aparelhos seja um Array
                         let aparelhos = Array.isArray(user.active_devices) ? user.active_devices : [];
                         
                         if (!aparelhos.includes(deviceId)) {
@@ -246,7 +251,6 @@
             try {
                 const res = await fetch(`${DB}/${currentLogged.id}.json`).then(r => r.json());
                 const deviceId = obterDeviceId();
-                // Se o ADM resetou, res.active_devices virá null ou vazio
                 if (!res || res.status === 'bloqueado' || !res.active_devices || !res.active_devices.includes(deviceId)) {
                     forceLogout();
                 }
@@ -270,14 +274,25 @@
         async function mudarSecao(tipo, btn) {
             secaoAtual = tipo;
             if(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+            
+            if(fullData[tipo] && fullCats[tipo]) {
+                renderizar(fullCats[tipo], fullData[tipo], tipo);
+                return;
+            }
+
             const principal = document.getElementById('conteudo-principal');
             principal.innerHTML = '<p style="text-align:center;padding:30px;color:var(--red);">Carregando biblioteca...</p>';
+            
             const catAct = tipo==='live'?'get_live_categories':tipo==='movie'?'get_vod_categories':'get_series_categories';
             const streamAct = tipo==='live'?'get_live_streams':tipo==='movie'?'get_vod_streams':'get_series';
+            
             try {
                 const cats = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json());
                 const streams = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json());
-                fullData[tipo] = streams; renderizar(cats, streams, tipo);
+                
+                fullData[tipo] = streams; 
+                fullCats[tipo] = cats; 
+                renderizar(cats, streams, tipo);
             } catch(e) { principal.innerHTML = '<p style="text-align:center;">Erro ao carregar IPTV.</p>'; }
         }
 
@@ -315,7 +330,7 @@
                     if(item && !continueWatching.some(x => (x.series_id || x.stream_id) === (item.series_id || item.stream_id))) continueWatching.push(item);
                 }
             }
-            document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">CONTINUAR ASSISTINDO</span></div><div class="grid-view">${continueWatching.map(i => cardHtml(i, tipo)).join('')}</div>`;
+            document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual)" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;">←</button><span class="row-title">CONTINUAR ASSISTINDO</span></div><div class="grid-view">${continueWatching.map(i => cardHtml(i, tipo)).join('')}</div>`;
             window.scrollTo(0,0);
         }
 
@@ -390,8 +405,27 @@
 
         function fecharModalEscolha() { document.getElementById('modal-escolha-ep').style.display = 'none'; }
 
+        // Função para detectar Double Tap no Player
+        function handlePlayerClick(e) {
+            const now = Date.now();
+            const timeDiff = now - lastClickTime;
+            lastClickTime = now;
+
+            if (timeDiff < 300) { // Double tap detectado
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                if (x > rect.width / 2) {
+                    player.currentTime(player.currentTime() + 10); // Lado direito: +10s
+                } else {
+                    player.currentTime(player.currentTime() - 10); // Lado esquerdo: -10s
+                }
+            }
+        }
+
         async function play(id, ext, tipo, startTime = 0, seriesParentId = null, seasonNum = null) {
             currentPlayingId = id; currentPlayingType = tipo; currentSeriesParent = seriesParentId; currentSeason = seasonNum;
+            playbackSessionStartTime = Date.now(); // Marca o início da reprodução real
+
             let url = (tipo === 'live') ? `${API.url}/live/${API.u}/${API.p}/${id}.m3u8` : (tipo === 'movie') ? `${API.url}/movie/${API.u}/${API.p}/${id}.${ext||'mp4'}` : `${API.url}/series/${API.u}/${API.p}/${id}.${ext||'mp4'}`;
             
             await solicitarWakeLock();
@@ -417,7 +451,16 @@
             if(!currentLogged.history) currentLogged.history = {};
             const percent = (time / duration) * 100;
 
-            if (time < 10) return;
+            // Se o usuário assistiu menos de 10 segundos NESTA SESSÃO, removemos o histórico
+            const sessionDuration = (Date.now() - playbackSessionStartTime) / 1000;
+
+            if (sessionDuration < 10) {
+                if (currentLogged.history[currentPlayingId]) {
+                    delete currentLogged.history[currentPlayingId];
+                    await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
+                }
+                return;
+            }
 
             if (percent >= 90) {
                 if (currentLogged.history[currentPlayingId]) {
@@ -436,7 +479,7 @@
             player.pause(); 
             liberarWakeLock();
             document.getElementById('player-box').style.display='none'; 
-            mudarSecao(secaoAtual);
+            renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual);
         }
 
         async function abrirADM() {
@@ -512,11 +555,17 @@
             document.getElementById('old-exp').value = exp; document.getElementById('btn-save-adm').innerText = "ATUALIZAR";
         }
         function limparFormADM() { document.getElementById('edit-id').value = ""; document.getElementById('new-u').value = ""; document.getElementById('new-p').value = ""; document.getElementById('btn-save-adm').innerText = "SALVAR CLIENTE"; }
-        function executarBusca(q) { if(!q) return mudarSecao(secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 40); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
+        function executarBusca(q) { if(!q) return renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 40); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
         async function toggleFav(event, id, tipo, name, img) { event.stopPropagation(); let f = currentLogged.favs || []; const idx = f.findIndex(x => x.id === String(id)); if(idx > -1) { f.splice(idx, 1); event.target.classList.remove('active'); } else { f.push({id: String(id), tipo, name, img}); event.target.classList.add('active'); } currentLogged.favs = f; await fetch(`${DB}/${currentLogged.id}/favs.json`, { method: 'PUT', body: JSON.stringify(f) }); }
         function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, series_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>`; }
-        function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="mudarSecao(secaoAtual)" style="background:none;border:none;color:white;font-size:20px;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; window.scrollTo(0,0); }
-        function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
+        function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual)" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; window.scrollTo(0,0); }
+        function fecharModais() { 
+            document.querySelectorAll('.modal').forEach(m => m.style.display='none'); 
+            if(fullData[secaoAtual] && fullCats[secaoAtual]) {
+                const busca = document.getElementById('main-search').value;
+                if(!busca) renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual);
+            }
+        }
     </script>
 </body>
 </html>
