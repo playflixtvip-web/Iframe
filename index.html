@@ -434,14 +434,12 @@
             const percent = (time / duration) * 100;
             if(!currentLogged.history) currentLogged.history = {};
 
-            // Lógica: se estiver nos primeiros 10 segundos ou já passou de 90% (finalizado), remove do histórico
             if (time < 10 || percent >= 90) {
                 if (currentLogged.history[currentPlayingId]) {
                     delete currentLogged.history[currentPlayingId];
                     await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
                 }
             } else {
-                // Caso contrário, salva o tempo atual
                 currentLogged.history[currentPlayingId] = { time, tipo: currentPlayingType, seriesParentId: currentSeriesParent, season: currentSeason };
                 await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
             }
@@ -497,7 +495,18 @@
         async function excluirUser(id) { if(confirm("Excluir?")) { await fetch(`${DB}/${id}.json`, { method: 'DELETE' }); abrirADM(); } }
         function prepararEdicao(id, u, p, s, exp) { document.getElementById('edit-id').value = id; document.getElementById('new-u').value = u; document.getElementById('new-p').value = p; document.getElementById('new-screens').value = s; document.getElementById('old-exp').value = exp; document.getElementById('btn-save-adm').innerText = "ATUALIZAR"; }
         function limparFormADM() { document.getElementById('edit-id').value = ""; document.getElementById('new-u').value = ""; document.getElementById('new-p').value = ""; document.getElementById('btn-save-adm').innerText = "SALVAR CLIENTE"; }
-        function executarBusca(q) { if(!q) return renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual); const res = fullData[secaoAtual].filter(i => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 40); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
+        
+        // FUNÇÃO DE BUSCA CORRIGIDA PARA FILMES
+        function executarBusca(q) { 
+            if(!q) return renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual); 
+            const termo = q.toLowerCase();
+            const res = fullData[secaoAtual].filter(i => {
+                const nome = (i.name || i.title || "").toLowerCase();
+                return nome.includes(termo);
+            }).slice(0, 50); 
+            document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; 
+        }
+
         async function toggleFav(event, id, tipo, name, img) { event.stopPropagation(); let f = currentLogged.favs || []; const idx = f.findIndex(x => x.id === String(id)); if(idx > -1) { f.splice(idx, 1); event.target.classList.remove('active'); } else { f.push({id: String(id), tipo, name, img}); event.target.classList.add('active'); } currentLogged.favs = f; await fetch(`${DB}/${currentLogged.id}/favs.json`, { method: 'PUT', body: JSON.stringify(f) }); }
         function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, series_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>`; }
         function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual)" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; window.scrollTo(0,0); }
