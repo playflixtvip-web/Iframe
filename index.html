@@ -15,8 +15,9 @@
         .welcome-center { text-align: center; font-size: 11px; color: #ccc; background: #111; padding: 8px; border-radius: 5px; margin-bottom: 5px; line-height: 1.4; }
         .welcome-center b { color: var(--red); }
         .welcome-center span { color: var(--yellow); font-weight: bold; }
-        .nav-btns { display: flex; gap: 10px; }
+        .nav-btns { display: flex; gap: 10px; align-items: center; }
         .btn-logout { background: none; border: 1px solid #444; color: #aaa; padding: 5px 10px; border-radius: 4px; font-size: 10px; cursor: pointer; }
+        .btn-config { background: #333; border: none; color: #fff; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
         .search-container { padding: 5px 15px 10px 15px; }
         .search-input { width: 100%; padding: 10px; background: #111; border: 1px solid #333; color: #fff; border-radius: 5px; box-sizing: border-box; }
         .secao-container { display: flex; gap: 8px; padding: 10px 12px 15px 12px; overflow-x: auto; scrollbar-width: none; background: var(--bg); }
@@ -39,48 +40,15 @@
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 1000; overflow-y: auto; padding: 15px; }
         .close-modal { position: absolute; top: 15px; right: 15px; font-size: 28px; color: #fff; cursor: pointer; z-index: 1001; }
         .user-card { background: #111; padding: 12px; border-radius: 10px; margin-bottom: 12px; border: 1px solid #333; font-size: 11px; }
-        .btn-adm { border: none; padding: 8px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #fff; cursor: pointer; }
+        .btn-adm, .btn-action { border: none; padding: 8px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #fff; cursor: pointer; }
         .input-adm { width: 100%; padding: 10px; margin-bottom: 10px; background: #222; border: 1px solid #333; color: #fff; border-radius: 5px; box-sizing: border-box; }
         
-        /* PLAYER E BOTÕES DINÂMICOS */
         #player-box { display: none; position: fixed; inset: 0; background: #000; z-index: 2000; }
-        
-        .vjs-custom-jump-container {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: flex;
-            gap: 60px;
-            z-index: 10;
-            pointer-events: none;
-            width: 100%;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        
+        .vjs-custom-jump-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; gap: 60px; z-index: 10; pointer-events: none; width: 100%; justify-content: center; opacity: 0; transition: opacity 0.3s; }
         .vjs-user-active .vjs-custom-jump-container { opacity: 1; }
-        
-        .jump-btn-inner {
-            pointer-events: auto;
-            background: rgba(0,0,0,0.6);
-            border: 2px solid rgba(255,255,255,0.2);
-            color: #fff;
-            width: 65px;
-            height: 65px;
-            border-radius: 50%;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: bold;
-        }
+        .jump-btn-inner { pointer-events: auto; background: rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.2); color: #fff; width: 65px; height: 65px; border-radius: 50%; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; }
         .jump-btn-inner:active { transform: scale(0.9); background: var(--red); }
         .jump-btn-inner span { font-size: 24px; }
-
         .ep-item { padding: 15px; border-bottom: 1px solid #222; text-align: left; background: #111; margin-bottom: 5px; border-radius: 5px; cursor: pointer; }
         .ep-item.highlight { border-left: 4px solid var(--red); background: #1a0a0a; }
     </style>
@@ -105,6 +73,7 @@
                 <div class="header-top">
                     <div class="logo">CLONEFLIX</div>
                     <div class="nav-btns">
+                        <button onclick="abrirConfig()" class="btn-config">⚙</button>
                         <button onclick="abrirADM()" id="adm-btn" style="display:none; background:var(--red); border:none; color:#fff; padding:5px 10px; border-radius:4px; font-size:10px; font-weight:bold;">ADM</button>
                         <button onclick="logout()" class="btn-logout">SAIR</button>
                     </div>
@@ -122,6 +91,28 @@
             </div>
         </div>
         <div id="conteudo-principal"></div>
+    </div>
+
+    <!-- MODAL CONFIGURAÇÕES USUÁRIO -->
+    <div id="modal-config" class="modal">
+        <span class="close-modal" onclick="fecharModais()">✕</span>
+        <div style="max-width:400px; margin: 40px auto; text-align: center;">
+            <h3 style="color:var(--red);">CONFIGURAÇÕES</h3>
+            
+            <div style="background:#111; padding:20px; border-radius:10px; border:1px solid #333; margin-bottom:20px;">
+                <h4 style="margin-top:0;">ALTERAR SENHA</h4>
+                <input type="password" id="cfg-pass-atual" placeholder="Senha Atual" class="input-adm">
+                <input type="password" id="cfg-pass-nova" placeholder="Nova Senha" class="input-adm">
+                <input type="password" id="cfg-pass-conf" placeholder="Confirmar Nova Senha" class="input-adm">
+                <button onclick="redefinirSenha()" style="width:100%; padding:12px; background:var(--red); color:#fff; border:none; border-radius:5px; font-weight:bold;">ATUALIZAR SENHA</button>
+            </div>
+
+            <div style="background:#111; padding:20px; border-radius:10px; border:1px solid #333;">
+                <h4 style="margin-top:0;">LIMPEZA</h4>
+                <p style="font-size:11px; color:#aaa;">Isso removerá todos os itens da seção "Continuar Assistindo".</p>
+                <button onclick="limparHistorico()" style="width:100%; padding:12px; background:#444; color:#fff; border:none; border-radius:5px; font-weight:bold;">LIMPAR HISTÓRICO</button>
+            </div>
+        </div>
     </div>
 
     <div id="modal-adm" class="modal">
@@ -147,7 +138,6 @@
     </div>
 
     <div id="modal-detalhes" class="modal"><span class="close-modal" onclick="fecharModais()">✕</span><div id="detalhes-body" style="text-align:center; max-width:500px; margin:40px auto; padding-bottom:50px;"></div></div>
-    
     <div id="modal-escolha-ep" class="modal" style="z-index: 1100; background: rgba(0,0,0,0.95);"><span class="close-modal" onclick="fecharModalEscolha()">✕</span><div id="escolha-body" style="text-align:center; margin-top:30vh; padding:20px;"></div></div>
 
     <div id="player-box">
@@ -162,33 +152,22 @@
         const DB = `${FIREBASE}/usuarios`;
         
         var player = videojs('vid');
-        
         const jumpContainer = document.createElement('div');
         jumpContainer.className = 'vjs-custom-jump-container';
         jumpContainer.id = 'jump-btns-ui';
-        jumpContainer.innerHTML = `
-            <button class="jump-btn-inner" onclick="pularTempo(-10)"><span>↺</span>10s</button>
-            <button class="jump-btn-inner" onclick="pularTempo(10)"><span>↻</span>10s</button>
-        `;
+        jumpContainer.innerHTML = `<button class="jump-btn-inner" onclick="pularTempo(-10)"><span>↺</span>10s</button><button class="jump-btn-inner" onclick="pularTempo(10)"><span>↻</span>10s</button>`;
         player.el().appendChild(jumpContainer);
 
-        var fullData = {}; 
-        var fullCats = {}; 
+        var fullData = {}; var fullCats = {}; 
         var currentLogged = {}; var secaoAtual = 'live'; var saveInterval = null;
-        var relogioInterval = null;
-        var wakeLock = null; 
-        var currentPlayingId = null;
-        var currentPlayingType = null;
-        var currentSeriesParent = null;
-        var currentSeason = null;
+        var relogioInterval = null; var wakeLock = null; 
+        var currentPlayingId = null; var currentPlayingType = null;
+        var currentSeriesParent = null; var currentSeason = null;
         var monitorSessaoInterval = null;
 
         function obterDeviceId() {
             let id = localStorage.getItem('clone_device_id');
-            if (!id) {
-                id = 'dev_' + Math.random().toString(36).substr(2, 9) + Date.now();
-                localStorage.setItem('clone_device_id', id);
-            }
+            if (!id) { id = 'dev_' + Math.random().toString(36).substr(2, 9) + Date.now(); localStorage.setItem('clone_device_id', id); }
             return id;
         }
 
@@ -203,19 +182,11 @@
             }
         };
 
-        async function solicitarWakeLock() {
-            try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
-        }
-
-        function liberarWakeLock() {
-            if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); }
-        }
+        async function solicitarWakeLock() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} }
+        function liberarWakeLock() { if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); } }
 
         async function carregarConfigServidor() {
-            try {
-                const res = await fetch(`${FIREBASE}/config.json`).then(r => r.json());
-                if(res && res.server) API = res.server;
-            } catch(e) {}
+            try { const res = await fetch(`${FIREBASE}/config.json`).then(r => r.json()); if(res && res.server) API = res.server; } catch(e) {}
         }
 
         async function autenticar(isAuto = false) {
@@ -223,14 +194,11 @@
             const p = document.getElementById('pass').value.trim();
             const statusDiv = document.getElementById('login-status');
             const deviceId = obterDeviceId();
-
             if(!u || !p) return;
-
             if(u === "Rhuan" && p === "270412") { 
-                currentLogged = { user: "Rhuan", adm: true, id: "admin", history: {}, favs: [], screens: 99, expira: 4102444800000 }; 
+                currentLogged = { user: "Rhuan", pass: "270412", adm: true, id: "admin", history: {}, favs: [], screens: 99, expira: 4102444800000 }; 
                 entrar(); return; 
             }
-
             statusDiv.innerText = "Verificando...";
             try {
                 const res = await fetch(`${DB}.json`).then(r => r.json());
@@ -239,29 +207,15 @@
                     const user = res[id];
                     if(user.user === u && user.pass === p) {
                         found = true;
-                        if(user.status === 'bloqueado' || user.status === 'suspenso') {
-                            statusDiv.innerText = "ACESSO BLOQUEADO!";
-                            return alert("Sua conta está BLOQUEADA ou SUSPENSA!");
-                        }
-                        if(user.expira && user.expira < Date.now()) {
-                            statusDiv.innerText = "ACESSO VENCIDO!";
-                            return alert("Seu acesso VENCEU!");
-                        }
+                        if(user.status === 'bloqueado') { statusDiv.innerText = "ACESSO BLOQUEADO!"; return alert("Sua conta está BLOQUEADA!"); }
+                        if(user.expira && user.expira < Date.now()) { statusDiv.innerText = "ACESSO VENCIDO!"; return alert("Seu acesso VENCEU!"); }
                         let aparelhos = Array.isArray(user.active_devices) ? user.active_devices : [];
                         if (!aparelhos.includes(deviceId)) {
-                            if (aparelhos.length >= (user.screens || 1)) {
-                                statusDiv.innerText = "LIMITE DE TELAS ATINGIDO!";
-                                return alert("Limite de telas atingido! Saia de outro aparelho primeiro.");
-                            }
+                            if (aparelhos.length >= (user.screens || 1)) { statusDiv.innerText = "LIMITE DE TELAS!"; return alert("Limite de telas atingido!"); }
                             aparelhos.push(deviceId);
-                            await fetch(`${DB}/${id}.json`, { 
-                                method: 'PATCH', 
-                                body: JSON.stringify({ active_devices: aparelhos, online_count: aparelhos.length }) 
-                            });
+                            await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ active_devices: aparelhos, online_count: aparelhos.length }) });
                         }
-                        currentLogged = user; 
-                        currentLogged.id = id;
-                        currentLogged.active_devices = aparelhos;
+                        currentLogged = user; currentLogged.id = id;
                         localStorage.setItem('clone_creds', JSON.stringify({u, p}));
                         entrar(); break;
                     }
@@ -288,9 +242,7 @@
             try {
                 const res = await fetch(`${DB}/${currentLogged.id}.json`).then(r => r.json());
                 const deviceId = obterDeviceId();
-                if (!res || res.status === 'bloqueado' || !res.active_devices || !res.active_devices.includes(deviceId)) {
-                    forceLogout();
-                }
+                if (!res || res.status === 'bloqueado' || !res.active_devices || !res.active_devices.includes(deviceId)) { forceLogout(); }
             } catch (e) {}
         }
 
@@ -299,10 +251,7 @@
         function atualizarRelogio(vencimento) {
             const agora = new Date();
             const diasSemana = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
-            document.getElementById('welcome-msg').innerHTML = `
-                Olá, <b>${currentLogged.user}</b> | Vence em: <span>${vencimento}</span><br>
-                <small style="color:#888; font-size:10px;">${diasSemana[agora.getDay()]}, ${agora.toLocaleDateString()} - ${agora.toLocaleTimeString()}</small>
-            `;
+            document.getElementById('welcome-msg').innerHTML = `Olá, <b>${currentLogged.user}</b> | Vence em: <span>${vencimento}</span><br><small style="color:#888; font-size:10px;">${diasSemana[agora.getDay()]}, ${agora.toLocaleDateString()} - ${agora.toLocaleTimeString()}</small>`;
         }
 
         async function mudarSecao(tipo, btn) {
@@ -316,8 +265,7 @@
             try {
                 const cats = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${catAct}`).then(r => r.json());
                 const streams = await fetch(`${API.url}/player_api.php?username=${API.u}&password=${API.p}&action=${streamAct}`).then(r => r.json());
-                fullData[tipo] = streams; fullCats[tipo] = cats; 
-                renderizar(cats, streams, tipo);
+                fullData[tipo] = streams; fullCats[tipo] = cats; renderizar(cats, streams, tipo);
             } catch(e) { principal.innerHTML = '<p style="text-align:center;">Erro ao carregar IPTV.</p>'; }
         }
 
@@ -329,9 +277,7 @@
                     if(item && !continueWatching.some(x => (x.series_id || x.stream_id) === (item.series_id || item.stream_id))) continueWatching.push(item);
                 }
             }
-            if(continueWatching.length > 0) {
-                html += `<div class="row"><div class="row-header"><span class="row-title" style="color:var(--yellow)">CONTINUAR ASSISTINDO</span><button class="btn-ver-mais" onclick="verMaisHistorico('${tipo}')">VER MAIS</button></div><div class="shelf">${continueWatching.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
-            }
+            if(continueWatching.length > 0) html += `<div class="row"><div class="row-header"><span class="row-title" style="color:var(--yellow)">CONTINUAR ASSISTINDO</span><button class="btn-ver-mais" onclick="verMaisHistorico('${tipo}')">VER MAIS</button></div><div class="shelf">${continueWatching.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
             cats.slice(0, 30).forEach(cat => {
                 const itens = streams.filter(s => s.category_id === cat.category_id);
                 if(itens.length > 0) html += `<div class="row"><div class="row-header"><span class="row-title">${cat.category_name}</span><button class="btn-ver-mais" onclick="verMais('${cat.category_id}', '${cat.category_name}')">VER MAIS</button></div><div class="shelf">${itens.slice(0, 8).map(i => cardHtml(i, tipo)).join('')}</div></div>`;
@@ -348,13 +294,11 @@
                 const hist = Object.values(history).find(h => String(h.seriesParentId) === id);
                 if(hist) { inProgress = true; seasonTag = `<span class="badge-season">T${hist.season}</span>`; }
             } else if(history[id]) inProgress = true;
-            const imgUrl = i.stream_icon || i.cover || i.img;
             return `<div class="card ${inProgress?'in-progress':''}">
-                ${inProgress ? '<span class="badge-continue">CONTINUAR</span>' : ''}
-                ${seasonTag}
-                <span class="fav-star ${isFav?'active':''}" onclick="toggleFav(event, '${id}','${tipo}','${i.name.replace(/'/g, "")}','${imgUrl}')">★</span>
+                ${inProgress ? '<span class="badge-continue">CONTINUAR</span>' : ''} ${seasonTag}
+                <span class="fav-star ${isFav?'active':''}" onclick="toggleFav(event, '${id}','${tipo}','${i.name.replace(/'/g, "")}','${i.stream_icon || i.cover || i.img}')">★</span>
                 <div onclick="abrirConteudo('${id}', '${tipo}')">
-                    <img loading="lazy" src="${imgUrl}" onerror="this.src='https://via.placeholder.com/150x225?text=Sem+Foto'">
+                    <img loading="lazy" src="${i.stream_icon || i.cover || i.img}" onerror="this.src='https://via.placeholder.com/150x225?text=Sem+Foto'">
                     <div class="card-name">${i.name}</div>
                 </div>
             </div>`;
@@ -366,16 +310,14 @@
             const info = res.info || res.movie_data; 
             let html = `<img src="${info.cover || info.movie_image}" style="width:160px; border-radius:8px;"><h2>${info.name}</h2><p style="font-size:12px; color:#aaa; padding:0 15px;">${info.plot || ''}</p>`;
             if(tipo === 'series') { 
-                window.tempEps = res.episodes;
-                const hist = Object.values(currentLogged.history || {}).find(h => String(h.seriesParentId) === id);
+                window.tempEps = res.episodes; const hist = Object.values(currentLogged.history || {}).find(h => String(h.seriesParentId) === id);
                 const lastS = hist ? hist.season : Object.keys(res.episodes)[0];
                 html += `<select id="season-select" class="input-adm" onchange="carregarEps(this.value, '${id}')">${Object.keys(res.episodes).map(s => `<option value="${s}" ${s==lastS?'selected':''}>Temporada ${s}</option>`).join('')}</select><div id="eps-box" style="margin-top:10px; max-height:300px; overflow-y:auto;"></div>`; 
                 setTimeout(() => carregarEps(lastS, id), 100);
             } else {
                 const hist = (currentLogged.history || {})[id]; const ext = info.container_extension || 'mp4';
-                if(hist) {
-                    html += `<button onclick="play('${id}','${ext}','movie', ${hist.time})" style="width:90%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px; margin-bottom:10px;">RETOMAR EM ${Math.floor(hist.time/60)}m</button><button onclick="play('${id}','${ext}','movie', 0)" style="width:90%; padding:10px; background:#333; color:#fff; border:none; border-radius:5px;">DO INÍCIO</button>`;
-                } else { html += `<button onclick="play('${id}','${ext}','movie')" style="width:90%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px;">ASSISTIR AGORA</button>`; }
+                if(hist) { html += `<button onclick="play('${id}','${ext}','movie', ${hist.time})" style="width:90%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px; margin-bottom:10px;">RETOMAR EM ${Math.floor(hist.time/60)}m</button><button onclick="play('${id}','${ext}','movie', 0)" style="width:90%; padding:10px; background:#333; color:#fff; border:none; border-radius:5px;">DO INÍCIO</button>`; } 
+                else { html += `<button onclick="play('${id}','${ext}','movie')" style="width:90%; padding:15px; background:var(--red); color:#fff; border:none; font-weight:bold; border-radius:5px;">ASSISTIR AGORA</button>`; }
             } 
             document.getElementById('detalhes-body').innerHTML = html; document.getElementById('modal-detalhes').style.display = 'block'; 
         }
@@ -401,48 +343,23 @@
         async function play(id, ext, tipo, startTime = 0, seriesParentId = null, seasonNum = null) {
             currentPlayingId = id; currentPlayingType = tipo; currentSeriesParent = seriesParentId; currentSeason = seasonNum;
             let url = (tipo === 'live') ? `${API.url}/live/${API.u}/${API.p}/${id}.m3u8` : (tipo === 'movie') ? `${API.url}/movie/${API.u}/${API.p}/${id}.${ext||'mp4'}` : `${API.url}/series/${API.u}/${API.p}/${id}.${ext||'mp4'}`;
-            
             document.getElementById('jump-btns-ui').style.visibility = (tipo === 'live') ? 'hidden' : 'visible';
-
             await solicitarWakeLock();
             document.getElementById('player-box').style.display = 'block';
             player.src({ src: url, type: tipo==='live'?'application/x-mpegURL':'video/mp4' });
-            
-            player.ready(() => { 
-                if(startTime > 0) player.currentTime(startTime); 
-                player.play(); 
-                if(tipo !== 'live') {
-                    if(saveInterval) clearInterval(saveInterval);
-                    saveInterval = setInterval(() => salvarProgressoFirebase(), 8000);
-                }
-            });
+            player.ready(() => { if(startTime > 0) player.currentTime(startTime); player.play(); if(tipo !== 'live') { if(saveInterval) clearInterval(saveInterval); saveInterval = setInterval(() => salvarProgressoFirebase(), 8000); } });
         }
 
-        function pularTempo(segundos) {
-            if(!player) return;
-            let tempoAtual = player.currentTime();
-            player.currentTime(tempoAtual + segundos);
-            player.userActive(true);
-        }
+        function pularTempo(segundos) { if(!player) return; player.currentTime(player.currentTime() + segundos); player.userActive(true); }
 
         async function salvarProgressoFirebase() {
             if(!currentPlayingId || currentPlayingType === 'live' || !currentLogged.id) return;
-            const time = Math.floor(player.currentTime()); 
-            const duration = player.duration(); 
+            const time = Math.floor(player.currentTime()); const duration = player.duration(); 
             if(!duration || isNaN(duration)) return;
-            
             const percent = (time / duration) * 100;
             if(!currentLogged.history) currentLogged.history = {};
-
-            if (time < 10 || percent >= 90) {
-                if (currentLogged.history[currentPlayingId]) {
-                    delete currentLogged.history[currentPlayingId];
-                    await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
-                }
-            } else {
-                currentLogged.history[currentPlayingId] = { time, tipo: currentPlayingType, seriesParentId: currentSeriesParent, season: currentSeason };
-                await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) });
-            }
+            if (time < 10 || percent >= 90) { if (currentLogged.history[currentPlayingId]) { delete currentLogged.history[currentPlayingId]; await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) }); } } 
+            else { currentLogged.history[currentPlayingId] = { time, tipo: currentPlayingType, seriesParentId: currentSeriesParent, season: currentSeason }; await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'PUT', body: JSON.stringify(currentLogged.history) }); }
         }
 
         async function fecharPlayer() { 
@@ -452,6 +369,40 @@
             document.getElementById('player-box').style.display='none'; 
             renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual);
         }
+
+        // --- NOVAS FUNÇÕES DE CONFIGURAÇÃO ---
+        function abrirConfig() { document.getElementById('modal-config').style.display = 'block'; }
+
+        async function redefinirSenha() {
+            const atual = document.getElementById('cfg-pass-atual').value;
+            const nova = document.getElementById('cfg-pass-nova').value;
+            const conf = document.getElementById('cfg-pass-conf').value;
+
+            if(!atual || !nova || !conf) return alert("Preencha todos os campos!");
+            if(nova !== conf) return alert("As novas senhas não coincidem!");
+            if(atual !== currentLogged.pass) return alert("Senha atual incorreta!");
+            if(nova.length < 4) return alert("A senha deve ter pelo menos 4 caracteres!");
+
+            try {
+                await fetch(`${DB}/${currentLogged.id}.json`, { method: 'PATCH', body: JSON.stringify({ pass: nova }) });
+                currentLogged.pass = nova;
+                localStorage.setItem('clone_creds', JSON.stringify({u: currentLogged.user, p: nova}));
+                alert("Senha alterada com sucesso!");
+                fecharModais();
+            } catch(e) { alert("Erro ao atualizar senha."); }
+        }
+
+        async function limparHistorico() {
+            if(!confirm("Deseja realmente apagar todo o seu histórico 'Continuar Assistindo'?")) return;
+            try {
+                await fetch(`${DB}/${currentLogged.id}/history.json`, { method: 'DELETE' });
+                currentLogged.history = {};
+                alert("Histórico limpo!");
+                fecharModais();
+                renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual);
+            } catch(e) { alert("Erro ao limpar histórico."); }
+        }
+        // -------------------------------------
 
         async function abrirADM() {
             document.getElementById('modal-adm').style.display = 'block';
@@ -464,12 +415,7 @@
             document.getElementById('lista-usuarios-adm').innerHTML = html;
         }
 
-        async function resetarTelas(id) {
-            if(confirm("Deseja desconectar todos os aparelhos?")) {
-                await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ active_devices: [], online_count: 0 }) });
-                alert("Telas liberadas!"); abrirADM();
-            }
-        }
+        async function resetarTelas(id) { if(confirm("Deseja desconectar todos os aparelhos?")) { await fetch(`${DB}/${id}.json`, { method: 'PATCH', body: JSON.stringify({ active_devices: [], online_count: 0 }) }); alert("Telas liberadas!"); abrirADM(); } }
 
         async function logout() {
             if (currentLogged && currentLogged.id !== "admin") {
@@ -495,22 +441,11 @@
         async function excluirUser(id) { if(confirm("Excluir?")) { await fetch(`${DB}/${id}.json`, { method: 'DELETE' }); abrirADM(); } }
         function prepararEdicao(id, u, p, s, exp) { document.getElementById('edit-id').value = id; document.getElementById('new-u').value = u; document.getElementById('new-p').value = p; document.getElementById('new-screens').value = s; document.getElementById('old-exp').value = exp; document.getElementById('btn-save-adm').innerText = "ATUALIZAR"; }
         function limparFormADM() { document.getElementById('edit-id').value = ""; document.getElementById('new-u').value = ""; document.getElementById('new-p').value = ""; document.getElementById('btn-save-adm').innerText = "SALVAR CLIENTE"; }
-        
-        // FUNÇÃO DE BUSCA CORRIGIDA PARA FILMES
-        function executarBusca(q) { 
-            if(!q) return renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual); 
-            const termo = q.toLowerCase();
-            const res = fullData[secaoAtual].filter(i => {
-                const nome = (i.name || i.title || "").toLowerCase();
-                return nome.includes(termo);
-            }).slice(0, 50); 
-            document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; 
-        }
-
+        function executarBusca(q) { if(!q) return renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual); const termo = q.toLowerCase(); const res = fullData[secaoAtual].filter(i => (i.name || "").toLowerCase().includes(termo)).slice(0, 50); document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${res.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; }
         async function toggleFav(event, id, tipo, name, img) { event.stopPropagation(); let f = currentLogged.favs || []; const idx = f.findIndex(x => x.id === String(id)); if(idx > -1) { f.splice(idx, 1); event.target.classList.remove('active'); } else { f.push({id: String(id), tipo, name, img}); event.target.classList.add('active'); } currentLogged.favs = f; await fetch(`${DB}/${currentLogged.id}/favs.json`, { method: 'PUT', body: JSON.stringify(f) }); }
         function mostrarFavoritos(btn) { document.querySelectorAll('.btn-secao').forEach(b => b.classList.remove('active')); btn.classList.add('active'); const f = currentLogged.favs || []; document.getElementById('conteudo-principal').innerHTML = `<div class="grid-view">${f.map(x => cardHtml({stream_id: x.id, series_id: x.id, name: x.name, img: x.img}, x.tipo)).join('')}</div>`; }
         function verMais(catId, catName) { const f = fullData[secaoAtual].filter(i => i.category_id === catId); document.getElementById('conteudo-principal').innerHTML = `<div class="row-header" style="padding:15px;"><button onclick="renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual)" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;">←</button><span class="row-title">${catName}</span></div><div class="grid-view">${f.map(i => cardHtml(i, secaoAtual)).join('')}</div>`; window.scrollTo(0,0); }
-        function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); if(fullData[secaoAtual] && fullCats[secaoAtual]) { const busca = document.getElementById('main-search').value; if(!busca) renderizar(fullCats[secaoAtual], fullData[secaoAtual], secaoAtual); } }
+        function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.style.display='none'); }
     </script>
 </body>
 </html>
